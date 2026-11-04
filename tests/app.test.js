@@ -33,9 +33,8 @@ async function freshPage(opts = {}) {
 }
 const text = async (page, sel) => (await page.locator(sel).innerText()).replace(/\u00a0/g, ' ');
 
-async function logEv(page, { date, time, kwh, place = 'home' }) {
+async function logEv(page, { date, time, kwh }) {
   await page.click('#tabEv');
-  await page.check(place === 'home' ? '#ePlaceHome' : '#ePlacePub');
   await page.fill('#eDate', date); await page.fill('#eTime', time); await page.fill('#eKwh', String(kwh));
   await page.click('#eSubmit');
 }
@@ -178,5 +177,36 @@ test('saving tariff settings keeps the remembered home meter entry type', async 
   await page.click('#settingsBox summary'); await page.fill('#sPpj', '3'); await page.click('#sSubmit');
   await page.reload();
   assert.equal(await page.isChecked('#hModeBalance'), true);
+  await ctx.close();
+});
+
+/* ---------- house-only: no public charging ---------- */
+test('public SPKLU charging is gone from the page', async () => {
+  const { ctx, page } = await freshPage();
+  assert.equal(await page.locator('#ePlacePub, #ePrice, #kEvPub, #sPub').count(), 0);
+  assert.doesNotMatch(await page.locator('body').innerText(), /SPKLU|public/i);
+  await ctx.close();
+});
+
+test('example data only has charging at home', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#loadExamples');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('meteran-rumah.v1')));
+  assert.ok(stored.charges.length > 0);
+  assert.equal(stored.charges.filter((c) => c.place === 'public').length, 0);
+  await ctx.close();
+});
+
+test('public sessions saved by an older version are left out of totals', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await page.evaluate((d) => localStorage.setItem('meteran-rumah.v1', JSON.stringify({ version: 1, settings: {}, usage: [], charges: [
+    { id: 'a', date: d, time: '22:30', kwh: 20, place: 'home', createdAt: d + 'T01:00:00Z' },
+    { id: 'b', date: d, time: '13:00', kwh: 25, place: 'public', pricePerKwh: 2467, createdAt: d + 'T02:00:00Z' },
+  ] })), d);
+  await page.reload();
+  assert.equal(await text(page, '#kTotal'), 'Rp 20.226');
+  assert.match(await text(page, '#kTotalSub'), /^20,0 kWh/);
+  assert.equal(await page.locator('#histWrap tbody tr').count(), 1);
   await ctx.close();
 });

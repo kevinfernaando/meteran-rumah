@@ -12,7 +12,7 @@
 <title>Meteran Rumah</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&family=Atkinson+Hyperlegible+Mono:wght@500;600&display=swap">
 <style>
 /* Layout: a meter-panel ledger — month header, readout strip, charts left / logging console right, history + tariff settings below. */
 :root {
@@ -27,24 +27,24 @@
   --accent-ink: #ffffff;
   --s1: #2a78d6;   /* household */
   --s2: #eb6834;   /* EV at home */
-  --s3: #1baf7a;   /* EV public SPKLU */
   --good: #0ca30c;
   --critical: #d03b3b;
   --warn-bg: #fff4dc;
   --warn-ink: #6b4a00;
-  --f-display: "Chakra Petch", "Bahnschrift", "Arial Narrow", sans-serif;
-  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Atkinson Hyperlegible: built for telling 0/O and 1/l apart, which matters when reading a meter. Mono cut only for the big readout figures. */
+  --f-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-display: var(--f-body);
+  --f-num: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --r: 6px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0e1215; --surface: #171c21; --sunken: #1f252b; --ink: #eef1f4; --ink-2: #b6bfc9; --muted: #8b95a0;
   --line: #2b333b; --accent: #9dbdf0; --accent-ink: #0e1215;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; } }
+  --s1: #3987e5; --s2: #d95926; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0e1215; --surface: #171c21; --sunken: #1f252b; --ink: #eef1f4; --ink-2: #b6bfc9; --muted: #8b95a0;
   --line: #2b333b; --accent: #9dbdf0; --accent-ink: #0e1215;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; }
+  --s1: #3987e5; --s2: #d95926; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -54,8 +54,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: grid; gap: 20px; }
-h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em; }
-h1 { font-size: 1.6rem; line-height: 1.1; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+h1 { font-size: 1.75rem; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
 h2 { font-size: 1.2rem; }
 .num { font-variant-numeric: tabular-nums; }
 .label { font-size: .85rem; color: var(--ink-2); font-weight: 500; }
@@ -76,15 +76,15 @@ button, input, select { font: inherit; color: inherit; }
 .notice button { border: 1px solid currentColor; background: transparent; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: .85rem; }
 
 /* readout strip */
-.readout { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.readout { display: grid; grid-template-columns: 1.4fr 1fr 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .readout > div { padding: 16px 18px; display: grid; gap: 2px; align-content: start; min-width: 0; }
 .readout > div + div { border-left: 1px solid var(--line); }
-.readout .big { font-family: var(--f-display); font-weight: 600; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.readout .mid { font-family: var(--f-display); font-weight: 600; font-size: 1.35rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.readout .big { font-family: var(--f-num); font-weight: 600; font-size: 2rem; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.readout .mid { font-family: var(--f-num); font-weight: 600; font-size: 1.35rem; letter-spacing: -.03em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .readout .sub { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .key { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); } .sw.s3 { background: var(--s3); }
+.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
 
 /* main grid */
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
@@ -102,7 +102,7 @@ button, input, select { font: inherit; color: inherit; }
 /* breakdown */
 .split { display: flex; height: 26px; gap: 2px; border-radius: 4px; overflow: hidden; background: var(--sunken); }
 .split div { min-width: 0; transition: flex-grow .3s ease; }
-.split .s1 { background: var(--s1); } .split .s2 { background: var(--s2); } .split .s3 { background: var(--s3); }
+.split .s1 { background: var(--s1); } .split .s2 { background: var(--s2); }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th { text-align: left; font-weight: 500; color: var(--muted); font-size: .8rem; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -118,7 +118,7 @@ tfoot td { font-weight: 600; border-bottom: 0; }
 .chart svg { display: block; width: 100%; overflow: visible; }
 .chart .grid line { stroke: var(--line); stroke-width: 1; }
 .chart .axis text { fill: var(--muted); font-family: var(--f-body); font-size: 11px; font-variant-numeric: tabular-nums; }
-.chart .f1 { fill: var(--s1); } .chart .f2 { fill: var(--s2); } .chart .f3 { fill: var(--s3); }
+.chart .f1 { fill: var(--s1); } .chart .f2 { fill: var(--s2); }
 .chart .band { fill: var(--ink); opacity: 0; }
 .chart .band.on { opacity: .06; }
 .chart .hit { fill: transparent; cursor: crosshair; }
@@ -148,7 +148,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .radios label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .radios input { accent-color: var(--accent); margin: 0; }
 .estimate { background: var(--sunken); border-radius: 5px; padding: 10px 12px; font-size: .86rem; color: var(--ink-2); display: grid; gap: 2px; }
-.estimate strong { font-family: var(--f-display); font-size: 1.15rem; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.estimate strong { font-family: var(--f-num); letter-spacing: -.02em; font-size: 1.15rem; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .btn { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 5px; padding: 10px 14px; font-weight: 600; cursor: pointer; font-size: .95rem; }
 .btn:hover { filter: brightness(1.1); }
 .btn:disabled { opacity: .5; cursor: default; filter: none; }
@@ -181,11 +181,11 @@ details.settings[open] > summary::after { content: "–"; }
   .readout { grid-template-columns: 1fr 1fr; }
   .readout > div:first-child { grid-column: 1 / -1; }
   .readout > div + div { border-left: 0; border-top: 1px solid var(--line); }
-  .readout > div:nth-child(4) { border-left: 1px solid var(--line); }
+  .readout > div:nth-child(3) { border-left: 1px solid var(--line); }
 }
 @media (max-width: 520px) {
   .readout { grid-template-columns: 1fr; }
-  .readout > div:nth-child(4) { border-left: 0; }
+  .readout > div:nth-child(3) { border-left: 0; }
   .readout .big { font-size: 1.75rem; }
   h1 { font-size: 1.4rem; }
   .row2 { grid-template-columns: 1fr; }
@@ -225,11 +225,6 @@ details.settings[open] > summary::after { content: "–"; }
       <span class="mid" id="kEvHome">Rp 0</span>
       <span class="sub" id="kEvHomeSub">0 kWh</span>
     </div>
-    <div>
-      <span class="label key"><i class="sw s3"></i>EV public (SPKLU)</span>
-      <span class="mid" id="kEvPub">Rp 0</span>
-      <span class="sub" id="kEvPubSub">0 kWh</span>
-    </div>
   </section>
 
   <div class="main">
@@ -261,19 +256,14 @@ details.settings[open] > summary::after { content: "–"; }
         <div class="legend">
           <span class="key"><i class="sw s1"></i>Household</span>
           <span class="key"><i class="sw s2"></i>EV at home</span>
-          <span class="key"><i class="sw s3"></i>EV public (SPKLU)</span>
         </div>
         <div class="chart" id="trendChart"></div>
       </section>
 
       <section class="panel" aria-labelledby="dailyTitle">
         <div class="panel-head">
-          <h2 id="dailyTitle">EV charging by day</h2>
+          <h2 id="dailyTitle">EV charging at home by day</h2>
           <p id="dailyNote">Sessions in the selected month</p>
-        </div>
-        <div class="legend">
-          <span class="key"><i class="sw s2"></i>At home</span>
-          <span class="key"><i class="sw s3"></i>Public (SPKLU)</span>
         </div>
         <div class="chart" id="dailyChart"></div>
       </section>
@@ -310,13 +300,6 @@ details.settings[open] > summary::after { content: "–"; }
         </form>
 
         <form id="formEv" role="tabpanel" aria-labelledby="tabEv" hidden novalidate>
-          <div class="field">
-            <span class="lbl">Where did you charge?</span>
-            <div class="radios">
-              <label><input type="radio" name="ePlace" id="ePlaceHome" value="home" checked> At home</label>
-              <label><input type="radio" name="ePlace" id="ePlacePub" value="public"> Public SPKLU</label>
-            </div>
-          </div>
           <div class="row2">
             <div class="field"><label for="eDate">Date</label><input type="date" id="eDate" required></div>
             <div class="field"><label for="eTime">Start time</label><input type="time" id="eTime" value="22:00" required></div>
@@ -324,10 +307,8 @@ details.settings[open] > summary::after { content: "–"; }
           <div class="row2">
             <div class="field"><label for="eKwh">Energy added</label>
               <div class="suffix"><input type="number" id="eKwh" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
-            <div class="field" id="ePriceField" hidden><label for="ePrice">SPKLU price</label>
-              <div class="suffix"><input type="number" id="ePrice" min="0" step="1" inputmode="numeric"><span>Rp/kWh</span></div></div>
           </div>
-          <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. 20% → 80%, SPKLU Rest Area KM 57"></div>
+          <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. 20% → 80%"></div>
           <div class="estimate" id="eEstimate"></div>
           <button class="btn" type="submit" id="eSubmit">Save charging session</button>
           <p class="status" id="eStatus" role="status"></p>
@@ -356,10 +337,8 @@ details.settings[open] > summary::after { content: "–"; }
                 <div class="suffix"><input type="number" id="sDisc" min="0" max="100" step="1"><span>%</span></div></div>
               <div class="field"><label for="sFrom">Discount window starts</label><input type="time" id="sFrom" step="3600"></div>
               <div class="field"><label for="sTo">Discount window ends</label><input type="time" id="sTo" step="3600"></div>
-              <div class="field"><label for="sPub">Default SPKLU price</label>
-                <div class="suffix"><input type="number" id="sPub" min="0" step="1"><span>Rp/kWh</span></div></div>
             </div>
-            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. The night discount applies to home charging sessions that start inside the window. PPJ is added to everything billed by PLN; SPKLU prices are used as entered.</p>
+            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. The night discount applies to home charging sessions that start inside the window. PPJ is added on top of the PLN rate.</p>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
               <button class="btn" type="submit" id="sSubmit">Save settings</button>
               <p class="status" id="sStatus" role="status"></p>
@@ -393,11 +372,11 @@ details.settings[open] > summary::after { content: "–"; }
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, evDiscount: 30, discFrom: 22, discTo: 5, publicPrice: 2467 };
+  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, evDiscount: 30, discFrom: 22, discTo: 5 };
   const S = {
     usage: [], charges: [], settings: { ...DEFAULTS },
     month: ymOf(new Date()), unit: "rp",
-    canWrite: true, storageOk: true,
+    canWrite: true, storageOk: true, legacyPublic: [],
   };
 
   /* ---------- formatting ---------- */
@@ -431,7 +410,6 @@ details.settings[open] > summary::after { content: "–"; }
   }
   function chargeCost(c) {
     const st = S.settings;
-    if (c.place === "public") return { rp: c.kwh * (c.pricePerKwh ?? st.publicPrice), offPeak: false };
     const off = isOffPeak(c.time);
     const base = c.kwh * st.tariff * (off ? 1 - st.evDiscount / 100 : 1);
     return { rp: base * (1 + st.ppj / 100), offPeak: off };
@@ -441,18 +419,17 @@ details.settings[open] > summary::after { content: "–"; }
     const us = S.usage.filter((u) => u.date.startsWith(ym));
     const cs = S.charges.filter((c) => c.date.startsWith(ym));
     const meter = us.reduce((a, u) => a + (u.kwh || 0), 0);
-    let evHomeKwh = 0, evHomeRp = 0, pubKwh = 0, pubRp = 0, offKwh = 0;
+    let evHomeKwh = 0, evHomeRp = 0, offKwh = 0;
     for (const c of cs) {
       const { rp: r, offPeak } = chargeCost(c);
-      if (c.place === "public") { pubKwh += c.kwh; pubRp += r; }
-      else { evHomeKwh += c.kwh; evHomeRp += r; if (offPeak) offKwh += c.kwh; }
+      evHomeKwh += c.kwh; evHomeRp += r; if (offPeak) offKwh += c.kwh;
     }
     const tops = us.filter((u) => u.kind === "topup");
     const topKwh = tops.reduce((a, u) => a + (u.tokenKwh || 0), 0), topPaid = tops.reduce((a, u) => a + (u.paidRp || 0), 0);
     const houseKwh = Math.max(0, meter - evHomeKwh);
     const houseRp = houseKwh * st.tariff * (1 + st.ppj / 100);
-    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, pubKwh, pubRp, offKwh,
-      totalKwh: houseKwh + evHomeKwh + pubKwh, totalRp: houseRp + evHomeRp + pubRp,
+    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, offKwh,
+      totalKwh: houseKwh + evHomeKwh, totalRp: houseRp + evHomeRp,
       evOverMeter: evHomeKwh > meter + 0.001 };
   }
 
@@ -466,13 +443,10 @@ details.settings[open] > summary::after { content: "–"; }
     $("kHouseSub").textContent = kwh(A.houseKwh);
     $("kEvHome").textContent = rp(A.evHomeRp);
     $("kEvHomeSub").textContent = kwh(A.evHomeKwh) + (A.offKwh ? ", " + numFmt0.format(A.offKwh / A.evHomeKwh * 100) + "% at night rate" : "");
-    $("kEvPub").textContent = rp(A.pubRp);
-    $("kEvPubSub").textContent = kwh(A.pubKwh);
 
     const rows = [
       { k: "s1", name: "Household (non-EV)", kwh: A.houseKwh, rp: A.houseRp },
       { k: "s2", name: "EV charging at home", kwh: A.evHomeKwh, rp: A.evHomeRp },
-      { k: "s3", name: "EV charging public", kwh: A.pubKwh, rp: A.pubRp },
     ];
     const tot = A.totalRp || 0;
     const split = $("split");
@@ -601,7 +575,6 @@ details.settings[open] > summary::after { content: "–"; }
       series: [
         { name: "Household", cls: "f1", sw: "s1", values: aggs.map((a) => rpMode ? a.houseRp : a.houseKwh) },
         { name: "EV at home", cls: "f2", sw: "s2", values: aggs.map((a) => rpMode ? a.evHomeRp : a.evHomeKwh) },
-        { name: "EV public", cls: "f3", sw: "s3", values: aggs.map((a) => rpMode ? a.pubRp : a.pubKwh) },
       ],
       fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
       fmtTip: (v) => rpMode ? rp(v) : kwh(v),
@@ -610,18 +583,17 @@ details.settings[open] > summary::after { content: "–"; }
       emptyText: "No usage logged in these months yet", maxBar: 44,
     });
     const nd = daysIn(S.month);
-    const home = new Array(nd).fill(0), pub = new Array(nd).fill(0);
+    const home = new Array(nd).fill(0);
     for (const c of S.charges) {
       if (!c.date.startsWith(S.month)) continue;
       const d = Number(c.date.slice(8)) - 1, v = rpMode ? chargeCost(c).rp : c.kwh;
-      (c.place === "public" ? pub : home)[d] += v;
+      home[d] += v;
     }
     drawStacked($("dailyChart"), {
       aria: "EV charging per day in " + ymLabel(S.month, true), height: 190,
       cats: Array.from({ length: nd }, (_, i) => i + 1),
       series: [
         { name: "At home", cls: "f2", sw: "s2", values: home },
-        { name: "Public", cls: "f3", sw: "s3", values: pub },
       ],
       fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
       fmtTip: (v) => rpMode ? rp(v) : kwh(v),
@@ -674,11 +646,10 @@ details.settings[open] > summary::after { content: "–"; }
         if (d.reading != null) detail = "Reading " + numFmt2.format(d.reading) + (detail ? " (" + detail + ")" : "");
       } else {
         const cc = chargeCost(d);
-        chip.innerHTML = `<i class="sw ${d.place === "public" ? "s3" : "s2"}"></i>${d.place === "public" ? "EV public" : "EV home"}`;
+        chip.innerHTML = `<i class="sw s2"></i>EV home`;
         tr.children[4].textContent = rp(cc.rp);
         const bits = [];
-        if (d.place === "public") bits.push("Rp " + numFmt0.format(d.pricePerKwh ?? S.settings.publicPrice) + "/kWh");
-        else bits.push(cc.offPeak ? "Night rate −" + S.settings.evDiscount + "%" : "Normal rate");
+        bits.push(cc.offPeak ? "Night rate −" + S.settings.evDiscount + "%" : "Normal rate");
         if (d.note) bits.push(d.note);
         detail = bits[0] + (bits[1] ? " (" + bits[1] + ")" : "");
       }
@@ -731,7 +702,6 @@ details.settings[open] > summary::after { content: "–"; }
 
   /* ---------- forms ---------- */
   const hMode = () => document.querySelector('input[name="hMode"]:checked').value;
-  const ePlace = () => document.querySelector('input[name="ePlace"]:checked').value;
   function lastReadingBefore(date) {
     return S.usage.filter((u) => u.reading != null && u.date <= date).sort((a, b) => (a.date + (a.createdAt || "")).localeCompare(b.date + (b.createdAt || ""))).pop();
   }
@@ -797,15 +767,12 @@ details.settings[open] > summary::after { content: "–"; }
       he.children[1].textContent = rp(h.kwh * st.tariff * (1 + st.ppj / 100));
       he.children[2].textContent = (h.prev ? `${numFmt2.format(h.kwh)} kWh since ${fmtDate(h.prev.date)}. ` : "") + `Includes any EV charging on this meter.`;
     }
-    const k = parseFloat($("eKwh").value), place = ePlace(), ee = $("eEstimate");
-    $("ePriceField").hidden = place !== "public";
-    const c = { kwh: k >= 0 ? k : 0, place, time: $("eTime").value, pricePerKwh: parseFloat($("ePrice").value) || st.publicPrice };
+    const k = parseFloat($("eKwh").value), ee = $("eEstimate");
+    const c = { kwh: k >= 0 ? k : 0, place: "home", time: $("eTime").value };
     const cc = chargeCost(c);
     ee.innerHTML = `<span>Estimated cost</span><strong></strong><span></span>`;
     ee.children[1].textContent = k > 0 ? rp(cc.rp) : "—";
-    ee.children[2].textContent = place === "public"
-      ? `SPKLU at Rp ${numFmt0.format(c.pricePerKwh)}/kWh, not on your home meter`
-      : cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
+    ee.children[2].textContent = cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
   }
   function setStatus(id, msg, kind) { const s = $(id); s.textContent = msg; s.className = "status" + (kind ? " " + kind : ""); }
 
@@ -820,7 +787,10 @@ details.settings[open] > summary::after { content: "–"; }
       const raw = localStorage.getItem(STORE_KEY);
       const data = raw ? JSON.parse(raw) : {};
       S.usage = Array.isArray(data.usage) ? data.usage.filter(validEntry) : [];
-      S.charges = Array.isArray(data.charges) ? data.charges.filter(validEntry) : [];
+      const charges = Array.isArray(data.charges) ? data.charges.filter(validEntry) : [];
+      // Public charging was removed; sessions saved by older versions are kept in storage and backups but not shown or counted.
+      S.legacyPublic = charges.filter((c) => c.place === "public");
+      S.charges = charges.filter((c) => c.place !== "public");
       S.settings = { ...DEFAULTS, ...(data.settings || {}) };
       recomputeTokenUsage();
       S.storageOk = true;
@@ -829,7 +799,7 @@ details.settings[open] > summary::after { content: "–"; }
   function persist() {
     recomputeTokenUsage();
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: S.charges }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic] }));
       S.storageOk = true; S.offlineMsg = "";
       return true;
     } catch (e) {
@@ -876,11 +846,10 @@ details.settings[open] > summary::after { content: "–"; }
 
   $("formEv").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const date = $("eDate").value, k = parseFloat($("eKwh").value), place = ePlace();
+    const date = $("eDate").value, k = parseFloat($("eKwh").value), place = "home";
     if (!date) return setStatus("eStatus", "Pick a date.", "err");
     if (!(k > 0)) return setStatus("eStatus", "Enter the energy added in kWh.", "err");
     const doc = { date, time: $("eTime").value || "00:00", kwh: Math.round(k * 100) / 100, place, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
-    if (place === "public") doc.pricePerKwh = parseFloat($("ePrice").value) || S.settings.publicPrice;
     $("eSubmit").disabled = true;
     try { await save("charges", doc); setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok"); $("eKwh").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("eStatus", e.message, "err"); }
@@ -895,6 +864,7 @@ details.settings[open] > summary::after { content: "–"; }
   function clearExamples() {
     S.usage = S.usage.filter((u) => !u.example);
     S.charges = S.charges.filter((c) => !c.example);
+    S.legacyPublic = S.legacyPublic.filter((c) => !c.example);
     persist(); render();
   }
 
@@ -912,8 +882,6 @@ details.settings[open] > summary::after { content: "–"; }
       const wd = d.getDay();
       if ((wd === 1 || wd === 3 || wd === 5) && rnd() < 0.9)
         charges.push({ date: iso(d), time: pick(["22:15", "22:30", "22:45", "23:00", "21:30", "19:10"]), kwh: +uni(16, 31).toFixed(1), place: "home", note: "" });
-      if (wd === 6 && rnd() < 0.45)
-        charges.push({ date: iso(d), time: pick(["10:20", "13:45", "16:05"]), kwh: +uni(14, 28).toFixed(1), place: "public", pricePerKwh: 2467, note: pick(["SPKLU mall", "SPKLU rest area", "SPKLU PLN office"]) });
     }
     let reading = 18234.5, prev = new Date(start); prev.setDate(prev.getDate() - 1);
     usage.push({ date: iso(start), kwh: 0, reading, note: "Starting reading" });
@@ -940,7 +908,7 @@ details.settings[open] > summary::after { content: "–"; }
 
   /* ---------- export / import ---------- */
   $("exportBtn").addEventListener("click", () => {
-    const body = JSON.stringify({ app: "meteran-rumah", version: 1, exportedAt: new Date().toISOString(), settings: S.settings, usage: S.usage, charges: S.charges }, null, 2);
+    const body = JSON.stringify({ app: "meteran-rumah", version: 1, exportedAt: new Date().toISOString(), settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic] }, null, 2);
     const url = URL.createObjectURL(new Blob([body], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url; a.download = "meteran-rumah-" + todayStr() + ".json";
@@ -959,7 +927,8 @@ details.settings[open] > summary::after { content: "–"; }
       for (const [key, list] of [["usage", data.usage], ["charges", data.charges]]) {
         for (const x of Array.isArray(list) ? list : []) {
           if (!validEntry(x)) continue;
-          if (key === "charges" && x.place !== "public") x.place = "home";
+          if (key === "charges" && x.place === "public") { if (!have.has(x.id)) { S.legacyPublic.push(x); have.add(x.id); } continue; }
+          if (key === "charges") x.place = "home";
           const entry = { ...x, id: x.id && !have.has(x.id) ? String(x.id) : newId() };
           if (x.id && have.has(x.id)) continue; // already in this browser
           have.add(entry.id); S[key].push(entry); added++;
@@ -982,8 +951,8 @@ details.settings[open] > summary::after { content: "–"; }
   $("tabHome").addEventListener("click", () => selectTab("home"));
   $("tabEv").addEventListener("click", () => selectTab("ev"));
   ["hValue", "hDate"].forEach((id) => $(id).addEventListener("input", updateEstimates));
-  ["eKwh", "eTime", "ePrice"].forEach((id) => $(id).addEventListener("input", updateEstimates));
-  document.querySelectorAll('input[name="hMode"], input[name="ePlace"]').forEach((r) => r.addEventListener("change", updateEstimates));
+  ["eKwh", "eTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
+  document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", updateEstimates));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.homeMode = r.value; persist(); }));
   $("hPaid").addEventListener("input", updateEstimates);
 
@@ -1004,8 +973,7 @@ details.settings[open] > summary::after { content: "–"; }
     const sel = $("sPreset");
     sel.value = [...sel.options].some((o) => o.value === st.preset) ? st.preset : "custom";
     $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sDisc").value = st.evDiscount;
-    $("sFrom").value = hh(st.discFrom); $("sTo").value = hh(st.discTo); $("sPub").value = st.publicPrice;
-    if (!$("ePrice").value) $("ePrice").placeholder = String(st.publicPrice);
+    $("sFrom").value = hh(st.discFrom); $("sTo").value = hh(st.discTo);
     const m = document.querySelector(`input[name="hMode"][value="${st.homeMode}"]`);
     if (m) m.checked = true;
   }
@@ -1016,7 +984,7 @@ details.settings[open] > summary::after { content: "–"; }
     const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
     const hr = (id, d) => { const v = $(id).value; return v ? parseInt(v.split(":")[0], 10) : d; };
     const next = { ...S.settings, tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0), evDiscount: Math.min(100, num("sDisc", 0)),
-      discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo), publicPrice: num("sPub", DEFAULTS.publicPrice) };
+      discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo) };
     $("sSubmit").disabled = true;
     try {
       S.settings = next; persist(); render(); setStatus("sStatus", "Settings saved.", "ok");
