@@ -77,27 +77,6 @@ test('household usage is the meter total minus home EV charging', async () => {
   await ctx.close();
 });
 
-test('export downloads a JSON backup that import restores in another browser', async () => {
-  const a = await freshPage();
-  const today = await a.page.evaluate(() => new Date().toISOString().slice(0, 10));
-  await logEv(a.page, { date: today, time: '23:00', kwh: 12.5 });
-  await a.page.click('#settingsBtn');
-  const [dl] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#exportBtn')]);
-  const file = path.join(require('node:os').tmpdir(), `meteran-backup-${Date.now()}.json`);
-  await dl.saveAs(file); // keep a copy: Playwright deletes downloads when the browser closes
-  const backup = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.equal(backup.charges.length, 1);
-  assert.equal(backup.charges[0].kwh, 12.5);
-  await a.ctx.close();
-
-  const b = await freshPage();
-  await b.page.click('#settingsBtn');
-  await b.page.setInputFiles('#importFile', file);
-  await b.page.waitForFunction(() => document.querySelector('#histWrap').innerText.includes('EV charge'));
-  assert.match(await text(b.page, '#importStatus'), /Imported 1 entr/);
-  await b.ctx.close();
-});
-
 test('clearing examples keeps the entries you logged yourself', async () => {
   const { ctx, page } = await freshPage();
   await page.click('#loadExamples');
@@ -469,5 +448,13 @@ test('chart axis labels stay inside the chart', async () => {
     return ts.filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5; }).map((t) => t.textContent);
   });
   assert.deepEqual(out, []);
+  await ctx.close();
+});
+
+test('settings no longer has a backup section', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#settingsBtn');
+  assert.equal(await page.locator('#exportBtn, #importFile, #importStatus').count(), 0);
+  assert.doesNotMatch(await page.locator('#sheetSettings').innerText(), /backup/i);
   await ctx.close();
 });

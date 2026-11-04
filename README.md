@@ -10,8 +10,7 @@ Track your home electricity and EV charging in kWh and Rupiah.
 
 ## Your data
 
-Everything is saved in your browser (localStorage) on the device you use. Nothing is sent to a server.
-Use **Export backup** and **Import backup** to keep a copy or move your log to another device.
+Each device keeps a copy in its browser (localStorage). With a shared household set up (below), every device syncs to the same online log; without it, data stays on the device.
 
 ## Run locally
 

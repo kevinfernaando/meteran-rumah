@@ -200,9 +200,6 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
 .active-charge { display: grid; gap: 10px; border: 1px solid var(--line-2); border-left: 4px solid var(--hi); border-radius: var(--r); padding: 10px; }
 .active-charge > strong { font-size: .95rem; }
 #eFormBody { display: grid; gap: 16px; }
-.filebtn { position: relative; overflow: hidden; display: inline-grid; place-items: center; cursor: pointer; }
-.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.filebtn:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
 .small { margin: 0; font-size: .8rem; color: var(--muted); }
 
 #toast { position: fixed; border-left: 4px solid var(--hi); left: var(--gl); right: var(--gr); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 40; max-width: 528px; margin: 0 auto;
@@ -380,13 +377,6 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
       </div>
     </div>
   </div>
-  <h3>Backup</h3>
-  <p class="small">Without sharing, data is saved in this browser on this device only. A backup file copies entries and settings to another device, or keeps a copy for safety.</p>
-  <div class="btns" style="margin-top:12px">
-    <button class="btn ghost" type="button" id="exportBtn">Export backup</button>
-    <label class="btn ghost filebtn">Import backup<input type="file" id="importFile" accept="application/json,.json"></label>
-  </div>
-  <p class="status" id="importStatus" role="status" style="margin-top:8px"></p>
 </section>
 
 <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -789,7 +779,7 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
       const data = raw ? JSON.parse(raw) : {};
       S.usage = Array.isArray(data.usage) ? data.usage.filter(validEntry) : [];
       const charges = Array.isArray(data.charges) ? data.charges.filter(validEntry) : [];
-      // Public charging was removed; sessions saved by older versions are kept in storage and backups but not shown or counted.
+      // Public charging was removed; sessions saved by older versions are kept in storage but not shown or counted.
       S.legacyPublic = charges.filter((c) => c.place === "public");
       S.charges = charges.filter((c) => c.place !== "public");
       S.settings = { ...DEFAULTS, ...(data.settings || {}) };
@@ -809,7 +799,7 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
     } catch (e) {
       S.storageOk = false;
       S.offlineMsg = e && e.name === "QuotaExceededError"
-        ? "This browser's storage is full. Export a backup and delete old entries to keep saving."
+        ? "This browser's storage is full. Delete old entries to keep saving."
         : "This browser isn't letting the page save (private mode or blocked site data). Entries will be lost when you close it.";
       return false;
     }
@@ -974,42 +964,6 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
     S.usage.push(...ex.usage); S.charges.push(...ex.charges);
     persist(); render();
   }
-
-  /* ---------- export / import ---------- */
-  $("exportBtn").addEventListener("click", () => {
-    const body = JSON.stringify({ app: "meteran-rumah", version: 1, exportedAt: new Date().toISOString(), settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic] }, null, 2);
-    const url = URL.createObjectURL(new Blob([body], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url; a.download = "meteran-rumah-" + todayStr() + ".json";
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus("importStatus", "Backup exported.", "ok");
-  });
-  $("importFile").addEventListener("change", async () => {
-    const file = $("importFile").files[0];
-    if (!file) return;
-    try {
-      const data = JSON.parse(await file.text());
-      if (!data || (!Array.isArray(data.usage) && !Array.isArray(data.charges))) throw new Error("shape");
-      const have = new Set([...S.usage, ...S.charges].map((x) => x.id));
-      let added = 0;
-      for (const [key, list] of [["usage", data.usage], ["charges", data.charges]]) {
-        for (const x of Array.isArray(list) ? list : []) {
-          if (!validEntry(x)) continue;
-          if (key === "charges" && x.place === "public") { if (!have.has(x.id)) { S.legacyPublic.push(x); have.add(x.id); } continue; }
-          if (key === "charges") x.place = "home";
-          const entry = { ...x, id: x.id && !have.has(x.id) ? String(x.id) : newId() };
-          if (x.id && have.has(x.id)) continue; // already in this browser
-          have.add(entry.id); S[key].push(entry); added++;
-        }
-      }
-      if (data.settings && typeof data.settings === "object") S.settings = { ...DEFAULTS, ...S.settings, ...data.settings };
-      persist(); fillSettings(); render();
-      setStatus("importStatus", added ? `Imported ${added} entr${added === 1 ? "y" : "ies"}.` : "Nothing new to import. Those entries are already here.", "ok");
-    } catch {
-      setStatus("importStatus", "That file isn't a Meteran Rumah backup. Choose a .json file made with Export backup.", "err");
-    } finally { $("importFile").value = ""; }
-  });
 
   /* ---------- sheets + toast ---------- */
   let lastOpener = null;
