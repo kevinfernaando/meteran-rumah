@@ -391,7 +391,7 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
 
 <div id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="config.js"></script>
+<script src="config.js?v=2"></script>
 <script>
 (() => {
   "use strict";
@@ -1242,15 +1242,26 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
   window.addEventListener("storage", (e) => { if (e.key === STORE_KEY) { loadStore(); fillSettings(); render(); } });
   loadSync(); renderSync();
   // A family link (#join=CODE) joins this device, whether it opens the app or the app is already open.
+  // If the link arrives before sharing is available on this device (e.g. an old cached config), keep the code and join later.
+  const PENDING_KEY = "meteran-rumah.pendingJoin";
   function joinFromLink() {
     const m = location.hash.match(/^#join=(.+)$/);
     if (!m) return false;
     history.replaceState(null, "", location.pathname + location.search);
-    joinHousehold(decodeURIComponent(m[1]));
+    const code = decodeURIComponent(m[1]);
+    if (!syncConfigured()) { try { localStorage.setItem(PENDING_KEY, code); } catch {} return true; }
+    joinHousehold(code);
     return true;
   }
   window.addEventListener("hashchange", joinFromLink);
-  if (!joinFromLink()) syncNow();
+  if (!joinFromLink()) {
+    let pending = null;
+    try { pending = localStorage.getItem(PENDING_KEY); } catch {}
+    if (pending && syncConfigured()) {
+      try { localStorage.removeItem(PENDING_KEY); } catch {}
+      if (!Y.code) joinHousehold(pending); else syncNow();
+    } else syncNow();
+  }
 })();
 </script>
 </body>

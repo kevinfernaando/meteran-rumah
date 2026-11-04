@@ -49,7 +49,7 @@ function fakeSupabase() {
 
 async function device(db, opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, ...opts });
-  await ctx.route('**/config.js', (route) => route.fulfill({ contentType: 'text/javascript', body: `window.METERAN_CONFIG = { supabaseUrl: "${API}", supabaseKey: "anon-test-key" };` }));
+  await ctx.route('**/config.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: `window.METERAN_CONFIG = { supabaseUrl: "${API}", supabaseKey: "anon-test-key" };` }));
   await ctx.route(API + '/**', async (route) => {
     const req = route.request();
     const fn = new URL(req.url()).pathname.split('/').pop();
@@ -187,4 +187,23 @@ test('a background sync does not undo a settings edit that is not saved yet', as
   await until(async () => (await a.page.locator('#syncState').innerText()) === 'synced');
   assert.equal(await a.page.inputValue('#sPreset'), '1699.53');
   await a.ctx.close();
+});
+
+test('a join link opened before sharing is available is remembered and used once it is', async () => {
+  const db = fakeSupabase(); db.households.add(CODE);
+  const a = await device(db);
+  let configured = false;
+  await a.ctx.route('**/config.js*', (route) => route.fulfill({ contentType: 'text/javascript',
+    body: configured ? `window.METERAN_CONFIG = { supabaseUrl: "${API}", supabaseKey: "anon-test-key" };` : 'window.METERAN_CONFIG = { supabaseUrl: "", supabaseKey: "" };' }));
+  await a.page.goto(base + '#join=' + CODE);                              // old, empty config still in use
+  configured = true;
+  await a.page.reload();                                                   // new config arrives
+  await a.page.click('#settingsBtn');
+  await a.page.waitForFunction(() => /connected/i.test(document.querySelector('#syncStatus').innerText));
+  await a.ctx.close();
+});
+
+test('the config file is requested under a versioned address so a refresh picks up changes', async () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(html, /<script src="config\.js\?v=[\w.-]+"><\/script>/);
 });
