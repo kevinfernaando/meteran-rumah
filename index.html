@@ -362,16 +362,12 @@ details.settings[open] > summary::after { content: "–"; }
                 <div class="suffix"><input type="number" id="sTariff" min="0" step="0.01"><span>Rp</span></div></div>
               <div class="field"><label for="sPpj">PPJ (street lighting tax)</label>
                 <div class="suffix"><input type="number" id="sPpj" min="0" max="20" step="0.1"><span>%</span></div></div>
-              <div class="field"><label for="sDisc">Home EV night discount</label>
-                <div class="suffix"><input type="number" id="sDisc" min="0" max="100" step="1"><span>%</span></div></div>
-              <div class="field"><label for="sFrom">Discount window starts</label><input type="time" id="sFrom" step="3600"></div>
-              <div class="field"><label for="sTo">Discount window ends</label><input type="time" id="sTo" step="3600"></div>
               <div class="field"><label for="sBattery">Usable battery</label>
                 <div class="suffix"><input type="number" id="sBattery" min="1" step="0.1"><span>kWh</span></div></div>
               <div class="field"><label for="sEff">Charging efficiency</label>
                 <div class="suffix"><input type="number" id="sEff" min="50" max="100" step="1"><span>%</span></div></div>
             </div>
-            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. The night discount applies to home charging sessions that start inside the window. PPJ is added on top of the PLN rate. The car defaults are for a Jaecoo J5 EV (60,9 kWh battery, about 58,9 kWh usable). Home AC charging loses roughly 10% as heat, so the meter sees more than the battery stores.</p>
+            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. PPJ is added on top of the PLN rate. EV charging runs through the same token meter, so it costs the same per kWh as the rest of the house. The car defaults are for a Jaecoo J5 EV (60,9 kWh battery, about 58,9 kWh usable). Home AC charging loses roughly 10% as heat, so the meter sees more than the battery stores.</p>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
               <button class="btn" type="submit" id="sSubmit">Save settings</button>
               <p class="status" id="sStatus" role="status"></p>
@@ -405,7 +401,7 @@ details.settings[open] > summary::after { content: "–"; }
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, evDiscount: 30, discFrom: 22, discTo: 5, batteryKwh: 58.9, chargeEff: 90 };
+  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, batteryKwh: 58.9, chargeEff: 90 };
   const S = {
     usage: [], charges: [], settings: { ...DEFAULTS },
     month: ymOf(new Date()), unit: "rp",
@@ -432,20 +428,12 @@ details.settings[open] > summary::after { content: "–"; }
   function ymLabel(ym, long) { const [y, m] = ym.split("-").map(Number); return (long ? MONTHS_L : MONTHS)[m - 1] + " " + y; }
   function daysIn(ym) { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); }
   function fmtDate(s) { const [y, m, d] = s.split("-").map(Number); return d + " " + MONTHS[m - 1]; }
-  const hh = (h) => String(h).padStart(2, "0") + ":00";
 
   /* ---------- cost model ---------- */
-  function isOffPeak(time) {
-    const { discFrom: a, discTo: b } = S.settings;
-    const h = parseInt((time || "00:00").split(":")[0], 10);
-    if (a === b) return false;
-    return a > b ? (h >= a || h < b) : (h >= a && h < b);
-  }
+  // The car charges on the home token meter, so every kWh costs the household rate (plus PPJ), whatever the time.
   function chargeCost(c) {
     const st = S.settings;
-    const off = isOffPeak(c.time);
-    const base = c.kwh * st.tariff * (off ? 1 - st.evDiscount / 100 : 1);
-    return { rp: base * (1 + st.ppj / 100), offPeak: off };
+    return { rp: c.kwh * st.tariff * (1 + st.ppj / 100) };
   }
   function monthAgg(ym) {
     const st = S.settings;
@@ -455,16 +443,15 @@ details.settings[open] > summary::after { content: "–"; }
     const meter = cons.reduce((a, u) => a + (u.kwh || 0), 0);
     const evInIntervals = cons.reduce((a, u) => a + (u.evKwh || 0), 0);
     const pendingKwh = (S.pending || []).filter((c) => c.date.startsWith(ym)).reduce((a, c) => a + c.kwh, 0);
-    let evHomeKwh = 0, evHomeRp = 0, offKwh = 0;
+    let evHomeKwh = 0, evHomeRp = 0;
     for (const c of cs) {
-      const { rp: r, offPeak } = chargeCost(c);
-      evHomeKwh += c.kwh; evHomeRp += r; if (offPeak) offKwh += c.kwh;
+      evHomeKwh += c.kwh; evHomeRp += chargeCost(c).rp;
     }
     const tops = us.filter((u) => u.kind === "topup");
     const topKwh = tops.reduce((a, u) => a + (u.tokenKwh || 0), 0), topPaid = tops.reduce((a, u) => a + (u.paidRp || 0), 0);
     const houseKwh = cons.reduce((a, u) => a + (u.houseKwh ?? u.kwh), 0);
     const houseRp = houseKwh * st.tariff * (1 + st.ppj / 100);
-    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, offKwh, evInIntervals, pendingKwh,
+    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, evInIntervals, pendingKwh,
       totalKwh: houseKwh + evHomeKwh, totalRp: houseRp + evHomeRp,
       evOverMeter: cons.some((u) => u.evOver) };
   }
@@ -478,7 +465,7 @@ details.settings[open] > summary::after { content: "–"; }
     $("kHouse").textContent = rp(A.houseRp);
     $("kHouseSub").textContent = kwh(A.houseKwh);
     $("kEvHome").textContent = rp(A.evHomeRp);
-    $("kEvHomeSub").textContent = kwh(A.evHomeKwh) + (A.offKwh ? ", " + numFmt0.format(A.offKwh / A.evHomeKwh * 100) + "% at night rate" : "");
+    $("kEvHomeSub").textContent = kwh(A.evHomeKwh) + (A.cs.length ? `, ${A.cs.length} session${A.cs.length > 1 ? "s" : ""}` : "");
 
     const rows = [
       { k: "s1", name: "Household (non-EV)", kwh: A.houseKwh, rp: A.houseRp },
@@ -509,7 +496,7 @@ details.settings[open] > summary::after { content: "–"; }
     let hint = `Each meter entry subtracts the home charging since the entry before it: meter ${kwh(A.meter)} − charging in those intervals ${kwh(A.evInIntervals)} = household ${kwh(A.houseKwh)}.`;
     if (A.pendingKwh) hint += S.hasMeter ? ` ${kwh(A.pendingKwh)} of charging since your last reading will be subtracted when you log the next one.` : ` Log a meter entry to split household use from the ${kwh(A.pendingKwh)} of charging.`;
     hint += ` PLN rate Rp ${numFmt2.format(st.tariff)}/kWh` +
-      (st.ppj ? `, PPJ ${numFmt2.format(st.ppj)}%` : "") + (st.evDiscount ? `, EV night discount ${st.evDiscount}% (${hh(st.discFrom)}–${hh(st.discTo)}).` : ".");
+      (st.ppj ? `, PPJ ${numFmt2.format(st.ppj)}%` : "") + ", the same for EV charging.";
     if (A.tops.length) hint += ` Token top-ups this month: ${A.tops.length}, adding ${kwh(A.topKwh)}` + (A.topPaid ? ` for ${rp(A.topPaid)} paid.` : ".");
     if (A.evOverMeter) hint = "In at least one entry this month, home charging was higher than the meter usage, so household counts as 0 there. Check for a missing or mistyped reading. " + hint;
     $("bdHint").textContent = hint;
@@ -693,7 +680,7 @@ details.settings[open] > summary::after { content: "–"; }
         tr.children[4].textContent = rp(cc.rp);
         const bits = [];
         if (d.socFrom != null) bits.push(`${numFmt0.format(d.socFrom)}% → ${numFmt0.format(d.socTo)}%, ${numFmt1.format(d.batteryKwh)} kWh into battery`);
-        bits.push(cc.offPeak ? "Night rate −" + S.settings.evDiscount + "%" : "Normal rate");
+        if (d.socFrom == null) bits.push("kWh from charger");
         detail = bits.join(", ") + (d.note ? " (" + d.note + ")" : "");
       }
       if (it.kind === "usage" && isConsumption(d) && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
@@ -832,9 +819,9 @@ details.settings[open] > summary::after { content: "–"; }
     const cc = chargeCost(c);
     ee.innerHTML = `<span>Estimated cost</span><strong></strong><span></span>`;
     ee.children[1].textContent = e && e.kwh ? rp(cc.rp) : "—";
-    const rate = cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
+    const rate = `Priced at Rp ${numFmt2.format(st.tariff)}/kWh${st.ppj ? " + PPJ " + numFmt2.format(st.ppj) + "%" : ""}, the same as the rest of the house`;
     $("eSubmit").textContent = e && e.startOnly ? "Start charging" : "Save charging session";
-    if (e && e.startOnly) { ee.children[0].textContent = "Start a charging session"; ee.children[1].textContent = "From " + numFmt0.format(e.from) + "%"; ee.children[2].textContent = `Save now and add the battery % when you unplug. ${rate}.`; }
+    if (e && e.startOnly) { ee.children[0].textContent = "Start a charging session"; ee.children[1].textContent = "From " + numFmt0.format(e.from) + "%"; ee.children[2].textContent = "Save now and add the battery % when you unplug."; }
     else if (e && e.invalid) { ee.children[0].textContent = "Check the percentages"; ee.children[2].textContent = "Battery after charging has to be higher than before."; }
     else if (socMode && e) ee.children[2].textContent = `${numFmt0.format(e.to - e.from)}% of ${numFmt1.format(st.batteryKwh)} kWh = ${numFmt1.format(e.battery)} kWh into the battery, about ${numFmt1.format(e.kwh)} kWh from your meter at ${numFmt0.format(st.chargeEff)}% efficiency. ${rate}.`;
     else if (socMode) ee.children[2].textContent = `Enter the battery % shown in the car before and after charging. ${rate}.`;
@@ -963,7 +950,7 @@ details.settings[open] > summary::after { content: "–"; }
     else {
       const cc = chargeCost({ kwh: r.kwh, place: "home", time: a.time });
       est.children[0].textContent = "Estimated cost"; est.children[1].textContent = rp(cc.rp);
-      est.children[2].textContent = `${numFmt1.format(r.battery)} kWh into the battery, about ${numFmt1.format(r.kwh)} kWh from your meter.` + (cc.offPeak ? ` Night rate applies (started ${a.time}).` : "");
+      est.children[2].textContent = `${numFmt1.format(r.battery)} kWh into the battery, about ${numFmt1.format(r.kwh)} kWh from your meter.`;
     }
   }
   async function finishCharge() {
@@ -1023,7 +1010,7 @@ details.settings[open] > summary::after { content: "–"; }
           socFrom: from, socTo: to, batteryKwh: Math.round(battery * 100) / 100, place: "home", note: "" });
       }
     }
-    // Simulate a token meter: house use every day, the car's charging at night, a token whenever it runs low, a reading on Sundays.
+    // Simulate a token meter: house use every day, the car's charging in the evening, a token whenever it runs low, a reading on Sundays.
     const tokens = [{ paid: 500000, kwh: 334.8 }, { paid: 200000, kwh: 133.4 }];
     let bal = 120;
     const r1 = (x) => Math.round(x * 10) / 10;
@@ -1114,8 +1101,7 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     const sel = $("sPreset");
     sel.value = [...sel.options].some((o) => o.value === st.preset) ? st.preset : "custom";
-    $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sDisc").value = st.evDiscount; $("sBattery").value = st.batteryKwh; $("sEff").value = st.chargeEff;
-    $("sFrom").value = hh(st.discFrom); $("sTo").value = hh(st.discTo);
+    $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sBattery").value = st.batteryKwh; $("sEff").value = st.chargeEff;
     const m = document.querySelector(`input[name="hMode"][value="${st.homeMode}"]`);
     if (m) m.checked = true;
     const em = document.querySelector(`input[name="eMode"][value="${st.evMode}"]`);
@@ -1126,9 +1112,7 @@ details.settings[open] > summary::after { content: "–"; }
   $("formSettings").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
-    const hr = (id, d) => { const v = $(id).value; return v ? parseInt(v.split(":")[0], 10) : d; };
-    const next = { ...S.settings, tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0), evDiscount: Math.min(100, num("sDisc", 0)),
-      discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo),
+    const next = { ...S.settings, tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0),
       batteryKwh: num("sBattery", DEFAULTS.batteryKwh) || DEFAULTS.batteryKwh, chargeEff: Math.min(100, Math.max(50, num("sEff", DEFAULTS.chargeEff))) };
     $("sSubmit").disabled = true;
     try {

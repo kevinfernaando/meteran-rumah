@@ -62,7 +62,7 @@ test('entries are saved in the browser and survive a reload', async () => {
   await logEv(page, { date: today, time: '22:30', kwh: 20 });
   await page.reload();
   assert.match(await text(page, '#histWrap'), /EV home/);
-  assert.equal(await text(page, '#kEvHome'), 'Rp 20.226'); // 20 kWh × Rp 1.444,70 × (1 − 30% night discount)
+  assert.equal(await text(page, '#kEvHome'), 'Rp 28.894'); // 20 kWh × Rp 1.444,70, same rate as the house
   await ctx.close();
 });
 
@@ -210,7 +210,7 @@ test('public sessions saved by an older version are left out of totals', async (
     { id: 'b', date: d, time: '13:00', kwh: 25, place: 'public', pricePerKwh: 2467, createdAt: d + 'T02:00:00Z' },
   ] })), d);
   await page.reload();
-  assert.equal(await text(page, '#kTotal'), 'Rp 20.226');
+  assert.equal(await text(page, '#kTotal'), 'Rp 28.894');
   assert.match(await text(page, '#kTotalSub'), /^20,0 kWh/);
   assert.equal(await page.locator('#histWrap tbody tr').count(), 1);
   await ctx.close();
@@ -266,7 +266,7 @@ test('battery percentages are turned into kWh drawn from the meter for a Jaecoo 
   await logSoc(page, { date: d, time: '22:30', from: 20, to: 80 });
   // 60% of 58,9 kWh usable = 35,34 kWh into the battery; at 90% charging efficiency ≈ 39,27 kWh from the meter
   assert.match(await text(page, '#kEvHomeSub'), /^39,3 kWh/);
-  assert.equal(await text(page, '#kEvHome'), 'Rp 39.713');            // 39,27 × 1.444,70 × 0,7 night rate
+  assert.equal(await text(page, '#kEvHome'), 'Rp 56.733');            // 39,27 × 1.444,70
   assert.match(await text(page, '#histWrap'), /20% → 80%/);
   assert.deepEqual(errors, []);
   await ctx.close();
@@ -319,7 +319,7 @@ test('a charge can be started with only the battery before, and finished later w
   await page.fill('#eFinishTo', '80');
   await page.click('#eFinish');
   assert.match(await text(page, '#kEvHomeSub'), /^39,3 kWh/);                // same as logging 20% → 80% in one go
-  assert.equal(await text(page, '#kEvHome'), 'Rp 39.713');                  // started at 22:30, so night rate
+  assert.equal(await text(page, '#kEvHome'), 'Rp 56.733');                  // same as logging it in one go
   assert.match(await text(page, '#histWrap'), /20% → 80%/);
   assert.equal(await page.locator('#eActive').isHidden(), true);
   assert.deepEqual(errors, []);
@@ -397,5 +397,17 @@ test('entries saved with the old "kWh used" option still count', async () => {
     { id: 'old', date: d, time: '23:59', kwh: 42, createdAt: d + 'T01:00:00Z' } ], charges: [] })), d);
   await page.reload();
   assert.match(await text(page, '#kHouseSub'), /^42,0 kWh/);
+  await ctx.close();
+});
+
+/* ---------- no night discount: the car charges on the home token meter ---------- */
+test('charging costs the same per kWh at any time of day', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logEv(page, { date: d, time: '22:30', kwh: 10 });
+  await logEv(page, { date: d, time: '14:00', kwh: 10 });
+  assert.equal(await text(page, '#kEvHome'), 'Rp 28.894');               // 20 × 1.444,70, no discount for either
+  assert.doesNotMatch(await page.locator('body').innerText(), /night|discount/i);
+  assert.equal(await page.locator('#sDisc, #sFrom, #sTo').count(), 0);
   await ctx.close();
 });
