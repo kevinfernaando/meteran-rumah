@@ -32,3 +32,14 @@ npm test
 ## Tariff defaults
 
 Presets are PLN non-subsidised household rates (for example Rp 1.444,70/kWh for 1.300–2.200 VA). Check them against your bill or token receipt and edit them in **Tariff settings** if they've changed.
+
+## Shared household (optional)
+
+To share one log across every phone in the house:
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In **SQL Editor**, run `supabase.sql` after replacing `__HOUSEHOLD_CODE__` with a long secret code.
+3. Put the project URL and its anon / publishable key in `config.js`.
+4. Open the app with `#join=YOUR_CODE` at the end of the address on each device, or enter the code in **Settings → Shared household**.
+
+Anyone with the code can read and edit the log, so share it only with your household.

@@ -4,44 +4,50 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Track home electricity and EV charging in kWh and Rupiah.">
-<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a12" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>Meteran Rumah</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&family=Atkinson+Hyperlegible+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700;800&family=Google+Sans+Code:wght@400;500;600&display=swap">
 <style>
-/* Layout: Swiss grid, one left-aligned column. Sections are separated by 1px hairlines, not cards.
-   Monochrome zinc with one accent (electric orange), which also marks EV charging in the data. */
+/* Layout: Swiss grid, one left-aligned column, sections split by 1px hairlines.
+   Palette (colorhunt 1F06AC / 0F42C0 / 5882E8 / E3EF4F): royal blue for actions, cornflower for household,
+   deep indigo (light) or lime (dark) for EV charging, lime for the "charging now" state. Neutrals lean slightly indigo. */
 :root {
-  --bg: #fafafa;
+  --bg: #fbfbfd;
   --surface: #ffffff;
-  --sunken: #f4f4f5;
-  --ink: #09090b;
-  --ink-2: #3f3f46;
-  --muted: #71717a;
-  --line: #e4e4e7;
-  --line-2: #d4d4d8;
-  --accent: #f0500f;
+  --sunken: #f3f3f8;
+  --ink: #0e0b24;
+  --ink-2: #3d3a58;
+  --muted: #6e6b85;
+  --line: #e6e6ee;
+  --line-2: #d5d5e0;
+  --accent: #0f42c0;
   --accent-ink: #ffffff;
-  --s1: #3f3f46;   /* household */
-  --s2: var(--accent);   /* EV charging */
-  --scrim: rgb(9 9 11 / .4);
-  --f-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --focus: #0f42c0;
+  --link: #0f42c0;
+  --s1: #5882e8;   /* household */
+  --s2: #1f06ac;   /* EV charging */
+  --hi: #e3ef4f;   /* charging now */
+  --hi-ink: #1f06ac;
+  --critical: #c62828;
+  --scrim: rgb(14 11 36 / .45);
+  --f-body: "Google Sans Flex", "Google Sans", "Product Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "Google Sans Code", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --r: 4px;
   --gl: max(16px, env(safe-area-inset-left, 0px));
   --gr: max(16px, env(safe-area-inset-right, 0px));
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #09090b; --surface: #0f0f11; --sunken: #18181b; --ink: #fafafa; --ink-2: #d4d4d8; --muted: #a1a1aa;
-  --line: #27272a; --line-2: #3f3f46; --accent: #ff6a2b; --accent-ink: #09090b; --s1: #d4d4d8; --scrim: rgb(0 0 0 / .6); color-scheme: dark; } }
+  --bg: #0b0a12; --surface: #12111b; --sunken: #1a1926; --ink: #f5f5fa; --ink-2: #d0d0dc; --muted: #9a99ad;
+  --line: #262536; --line-2: #36344a; --focus: #5882e8; --link: #8fa9f0; --s2: #e3ef4f; --critical: #ff6b6b; --scrim: rgb(0 0 0 / .6); color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #09090b; --surface: #0f0f11; --sunken: #18181b; --ink: #fafafa; --ink-2: #d4d4d8; --muted: #a1a1aa;
-  --line: #27272a; --line-2: #3f3f46; --accent: #ff6a2b; --accent-ink: #09090b; --s1: #d4d4d8; --scrim: rgb(0 0 0 / .6); color-scheme: dark; }
+  --bg: #0b0a12; --surface: #12111b; --sunken: #1a1926; --ink: #f5f5fa; --ink-2: #d0d0dc; --muted: #9a99ad;
+  --line: #262536; --line-2: #36344a; --focus: #5882e8; --link: #8fa9f0; --s2: #e3ef4f; --critical: #ff6b6b; --scrim: rgb(0 0 0 / .6); color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -51,13 +57,18 @@ body.locked { overflow: hidden; }
 [hidden] { display: none !important; }
 h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -.01em; }
 button, input, select { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 
 .app { max-width: 560px; margin: 0 auto; padding: 0 var(--gr) calc(84px + env(safe-area-inset-bottom, 0px)) var(--gl); }
 .app > * { min-width: 0; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 52px; border-bottom: 1px solid var(--line); }
 .top h1 { font-size: 1.05rem; font-weight: 800; letter-spacing: -.02em; }
+.top-right { display: flex; align-items: center; gap: 10px; }
+.syncstate { font-family: var(--f-mono); font-size: .72rem; color: var(--muted); }
+.syncstate.bad { color: var(--critical); }
+.joinrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+#syncLink { font-family: var(--f-mono); font-size: .8rem; color: var(--ink-2); }
 .textbtn { height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); font-size: .85rem; font-weight: 600; cursor: pointer; }
 .textbtn:hover { border-color: var(--ink); }
 
@@ -69,7 +80,7 @@ button, input, select { font: inherit; color: inherit; }
 
 .notice { margin-top: 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); padding: 10px 12px; font-size: .88rem; color: var(--ink-2); display: grid; gap: 8px; }
 .notice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.notice button { height: 30px; padding: 0 10px; border: 1px solid var(--ink); border-radius: var(--r); background: transparent; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.notice button { height: 30px; padding: 0 10px; border: 1px solid var(--link); color: var(--link); border-radius: var(--r); background: transparent; font-size: .82rem; font-weight: 700; cursor: pointer; }
 
 /* summary */
 .sum { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
@@ -97,7 +108,7 @@ button, input, select { font: inherit; color: inherit; }
 .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 0 10px; height: 28px; cursor: pointer; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line-2); }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .legend { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .8rem; color: var(--ink-2); }
 .key { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -131,7 +142,7 @@ button, input, select { font: inherit; color: inherit; }
 .tag { font-family: var(--f-mono); font-size: .68rem; font-weight: 500; border: 1px solid var(--line-2); color: var(--muted); border-radius: 2px; padding: 0 4px; margin-left: 6px; white-space: nowrap; }
 .del { width: 28px; height: 28px; border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: var(--r); cursor: pointer; font-size: 1rem; line-height: 1; }
 .del:hover { border-color: var(--line-2); color: var(--ink); }
-.del.armed { width: auto; min-width: 28px; padding: 0 5px; border-color: var(--accent); color: var(--accent); font-family: var(--f-mono); font-size: .7rem; font-weight: 600; }
+.del.armed { width: auto; min-width: 28px; padding: 0 5px; border-color: var(--critical); color: var(--critical); font-family: var(--f-mono); font-size: .7rem; font-weight: 600; }
 .emptybox { padding: 14px 0; color: var(--ink-2); display: grid; gap: 2px; font-size: .88rem; }
 .emptybox strong { font-size: .95rem; color: var(--ink); }
 
@@ -141,8 +152,8 @@ button, input, select { font: inherit; color: inherit; }
 .actionbar-in { max-width: 528px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .act { min-height: 48px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font-weight: 700; font-size: .95rem; cursor: pointer; display: grid; align-content: center; justify-items: start; text-align: left; line-height: 1.2; padding: 6px 12px; }
 .act small { font-family: var(--f-mono); font-weight: 500; font-size: .72rem; color: inherit; opacity: .8; }
-.act-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.act.charging { border-color: var(--accent); color: var(--accent); }
+.act-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.act.charging { background: var(--hi); border-color: var(--hi); color: var(--hi-ink); }
 
 /* sheets */
 #backdrop { position: fixed; inset: 0; background: var(--scrim); z-index: 20; }
@@ -162,34 +173,34 @@ form { display: grid; gap: 10px; }
 input[type="text"], input[type="number"], input[type="date"], input[type="time"], select {
   width: 100%; min-width: 0; height: 44px; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 10px; font-size: 16px; }
 input[type="number"], input[type="date"], input[type="time"] { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
-input:focus, select:focus { border-color: var(--ink); outline: none; }
+input:focus, select:focus { border-color: var(--focus); outline: none; box-shadow: inset 0 0 0 1px var(--focus); }
 .suffix { position: relative; }
 .suffix input { padding-right: 52px; }
 .suffix span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: var(--f-mono); font-size: .76rem; color: var(--muted); pointer-events: none; }
 .choice { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
 .choice label { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px; cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--muted); }
 .choice label + label { border-left: 1px solid var(--line-2); }
-.choice label:has(input:checked) { background: var(--ink); color: var(--bg); }
-.choice input { accent-color: var(--accent); margin: 0; }
+.choice label:has(input:checked) { background: var(--accent); color: var(--accent-ink); }
+.choice input { accent-color: var(--hi); margin: 0; }
 .estimate { border: 1px solid var(--line); border-radius: var(--r); background: var(--sunken); padding: 8px 10px; font-size: .82rem; color: var(--ink-2); display: grid; gap: 1px; }
 .estimate strong { font-family: var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing: -.03em; font-size: 1.1rem; color: var(--ink); font-weight: 600; }
-.btn { height: 46px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 0 14px; font-weight: 700; cursor: pointer; font-size: .95rem; }
+.btn { height: 46px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); border-radius: var(--r); padding: 0 14px; font-weight: 700; cursor: pointer; font-size: .95rem; }
 .btn:hover { opacity: .9; }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line-2); }
-.btn.ghost.armed { border-color: var(--accent); color: var(--accent); }
+.btn.ghost.armed { border-color: var(--critical); color: var(--critical); }
 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .status { font-size: .82rem; min-height: 1.2em; margin: 0; color: var(--ink-2); }
-.status.ok { color: var(--ink-2); } .status.err { color: var(--accent); font-weight: 600; }
-.active-charge { display: grid; gap: 10px; border: 1px solid var(--accent); border-radius: var(--r); padding: 10px; }
-.active-charge > strong { font-size: .95rem; color: var(--accent); }
+.status.ok { color: var(--ink-2); } .status.err { color: var(--critical); font-weight: 600; }
+.active-charge { display: grid; gap: 10px; border: 1px solid var(--line-2); border-left: 4px solid var(--hi); border-radius: var(--r); padding: 10px; }
+.active-charge > strong { font-size: .95rem; }
 #eFormBody { display: grid; gap: 10px; }
 .filebtn { position: relative; overflow: hidden; display: inline-grid; place-items: center; cursor: pointer; }
 .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filebtn:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
 .small { margin: 0; font-size: .8rem; color: var(--muted); }
 
-#toast { position: fixed; left: var(--gl); right: var(--gr); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 40; max-width: 528px; margin: 0 auto;
+#toast { position: fixed; border-left: 4px solid var(--hi); left: var(--gl); right: var(--gr); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 40; max-width: 528px; margin: 0 auto;
   background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 9px 12px; font-size: .86rem; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -199,7 +210,7 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
 <main class="app">
   <header class="top">
     <h1>Meteran Rumah</h1>
-    <button type="button" class="textbtn" id="settingsBtn" aria-haspopup="dialog">Settings</button>
+    <div class="top-right"><span class="syncstate" id="syncState" aria-live="polite"></span><button type="button" class="textbtn" id="settingsBtn" aria-haspopup="dialog">Settings</button></div>
   </header>
 
   <nav class="monthnav" aria-label="Month">
@@ -350,8 +361,23 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
     <button class="btn" type="submit" id="sSubmit">Save settings</button>
     <p class="status" id="sStatus" role="status"></p>
   </form>
-  <h3>Your data</h3>
-  <p class="small">Saved in this browser on this device only. Your phone and iPad each keep their own copy. To copy everything (entries and settings) to another device, export a backup here and import it there.</p>
+  <h3>Shared household</h3>
+  <div style="display:grid; gap:8px; margin-top:8px">
+    <p class="small" id="syncStatus" role="status"></p>
+    <div class="joinrow" id="syncJoin" hidden>
+      <input type="text" id="syncCode" placeholder="Household code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Household code">
+      <button class="btn" type="button" id="syncConnect">Connect</button>
+    </div>
+    <div id="syncLinkBox" style="display:grid; gap:8px" hidden>
+      <input type="text" id="syncLink" readonly aria-label="Family link">
+      <div class="btns">
+        <button class="btn ghost" type="button" id="syncCopy">Copy family link</button>
+        <button class="btn ghost" type="button" id="syncLeave">Disconnect</button>
+      </div>
+    </div>
+  </div>
+  <h3>Backup</h3>
+  <p class="small">Without sharing, data is saved in this browser on this device only. A backup file copies entries and settings to another device, or keeps a copy for safety.</p>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" type="button" id="exportBtn">Export backup</button>
     <label class="btn ghost filebtn">Import backup<input type="file" id="importFile" accept="application/json,.json"></label>
@@ -361,6 +387,7 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
 
 <div id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="config.js"></script>
 <script>
 (() => {
   "use strict";
@@ -774,6 +801,7 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic], activeCharge: S.active }));
       S.storageOk = true; S.offlineMsg = "";
+      if (!S.applyingRemote && typeof scheduleSync === "function") scheduleSync();
       return true;
     } catch (e) {
       S.storageOk = false;
@@ -1051,6 +1079,147 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
     finally { $("sSubmit").disabled = !S.canWrite; }
   });
 
+  /* ---------- shared household sync (Supabase functions in supabase.sql) ---------- */
+  const CFG = window.METERAN_CONFIG || {};
+  const SYNC_KEY = "meteran-rumah.sync";
+  const LOCAL_ONLY = ["homeMode", "evMode"];                               // per-device preferences
+  const DERIVED = ["evKwh", "houseKwh", "evOver", "baseline", "mismatch"]; // recalculated on every device
+  const Y = { code: "", since: null, synced: {}, lastOk: null, state: "local", msg: "", busy: false, again: false };
+  const syncConfigured = () => !!(CFG.supabaseUrl && CFG.supabaseKey);
+  function loadSync() { try { Object.assign(Y, JSON.parse(localStorage.getItem(SYNC_KEY) || "{}")); } catch {} Y.state = Y.code ? "idle" : "local"; }
+  function saveSync() { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ code: Y.code, since: Y.since, synced: Y.synced, lastOk: Y.lastOk })); } catch {} }
+  function localRows() {
+    const rows = {}, clean = (x) => { const o = { ...x }; DERIVED.forEach((k) => delete o[k]); return o; };
+    for (const u of S.usage) rows["u:" + u.id] = { id: "u:" + u.id, kind: "usage", data: clean(u) };
+    for (const c of [...S.charges, ...S.legacyPublic]) rows["c:" + c.id] = { id: "c:" + c.id, kind: "charge", data: clean(c) };
+    const st = { ...S.settings }; LOCAL_ONLY.forEach((k) => delete st[k]);
+    rows.settings = { id: "settings", kind: "settings", data: st };
+    if (S.active) rows.active = { id: "active", kind: "active", data: { ...S.active } };
+    return rows;
+  }
+  // A row's signature ignores values that are worked out locally (token-meter usage is derived from the readings).
+  function sig(row) {
+    const d = { ...(row.data || {}) };
+    if (row.kind === "usage" && (d.kind === "balance" || (d.kind === "topup" && d.balance != null))) delete d.kwh;
+    DERIVED.forEach((k) => delete d[k]); LOCAL_ONLY.forEach((k) => delete d[k]);
+    return JSON.stringify(d, Object.keys(d).sort());
+  }
+  async function rpc(fn, body) {
+    const headers = { "Content-Type": "application/json", apikey: CFG.supabaseKey };
+    if (!String(CFG.supabaseKey).startsWith("sb_publishable_")) headers.Authorization = "Bearer " + CFG.supabaseKey;
+    const res = await fetch(CFG.supabaseUrl.replace(/\/+$/, "") + "/rest/v1/rpc/" + fn, { method: "POST", headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      let m = ""; try { m = (await res.json()).message || ""; } catch {}
+      const e = new Error(m || "HTTP " + res.status); e.unknown = /unknown household/i.test(m); throw e;
+    }
+    return res.json();
+  }
+  function putLocal(r) {
+    const d = r.data || {};
+    if (r.kind === "settings") { const keep = {}; LOCAL_ONLY.forEach((k) => { if (S.settings[k] !== undefined) keep[k] = S.settings[k]; }); S.settings = { ...DEFAULTS, ...d, ...keep }; return true; }
+    if (r.kind === "active") { S.active = typeof d.date === "string" && typeof d.socFrom === "number" ? { ...d } : null; return true; }
+    if (!validEntry(d)) return false;
+    if (r.kind === "usage") { S.usage = S.usage.filter((x) => x.id !== d.id); S.usage.push({ ...d }); return true; }
+    S.charges = S.charges.filter((x) => x.id !== d.id); S.legacyPublic = S.legacyPublic.filter((x) => x.id !== d.id);
+    (d.place === "public" ? S.legacyPublic : S.charges).push({ ...d }); return true;
+  }
+  function removeLocal(r) {
+    if (r.kind === "usage") S.usage = S.usage.filter((x) => "u:" + x.id !== r.id);
+    else if (r.kind === "charge") { S.charges = S.charges.filter((x) => "c:" + x.id !== r.id); S.legacyPublic = S.legacyPublic.filter((x) => "c:" + x.id !== r.id); }
+    else if (r.kind === "active") S.active = null;
+  }
+  // Remote rows win unless this device changed the same row and hasn't sent it yet.
+  // When joining, the household's settings and open charge win over this device's.
+  // Returns what actually changed, so a sync that only re-reads known rows touches nothing on screen.
+  function applyRemote(rows, joining) {
+    const local = localRows(), changed = { any: false, settings: false };
+    for (const r of rows) {
+      const dirty = local[r.id] ? sig(local[r.id]) !== Y.synced[r.id] : r.id in Y.synced;
+      if (dirty && !(joining && (r.kind === "settings" || r.kind === "active"))) continue;
+      const differs = r.deleted ? !!local[r.id] : !local[r.id] || sig(local[r.id]) !== sig(r);
+      if (r.deleted) { removeLocal(r); delete Y.synced[r.id]; }
+      else if (putLocal(r)) Y.synced[r.id] = sig(r);
+      if (differs) { changed.any = true; if (r.kind === "settings") changed.settings = true; }
+    }
+    return changed;
+  }
+  async function syncNow(joining) {
+    if (!syncConfigured() || !Y.code) return false;
+    if (Y.busy) { Y.again = true; return false; }
+    Y.busy = true; setSyncState("syncing");
+    try {
+      const since = Y.since ? new Date(Date.parse(Y.since) - 60000).toISOString() : null;   // overlap a minute: re-applying is harmless
+      const rows = await rpc("pull", { p_code: Y.code, p_since: since });
+      if (rows.length) {
+        S.applyingRemote = true;
+        const changed = applyRemote(rows, joining);
+        Y.since = rows.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), Y.since || "");
+        if (changed.any) {
+          persist();
+          if (changed.settings && $("sheetSettings").hidden) fillSettings();   // never reset a form someone is editing
+          render();
+        }
+        S.applyingRemote = false;
+      }
+      const local = localRows(), out = [];
+      for (const id in local) { const s = sig(local[id]); if (Y.synced[id] !== s) out.push({ ...local[id], deleted: false, _sig: s }); }
+      for (const id in Y.synced) if (!local[id]) out.push({ id, kind: id === "settings" || id === "active" ? id : id.startsWith("u:") ? "usage" : "charge", data: null, deleted: true });
+      if (out.length) {
+        await rpc("push", { p_code: Y.code, p_rows: out.map(({ _sig, ...r }) => r) });
+        for (const r of out) { if (r.deleted) delete Y.synced[r.id]; else Y.synced[r.id] = r._sig; }
+      }
+      Y.lastOk = new Date().toISOString(); saveSync(); setSyncState("ok");
+      return true;
+    } catch (e) {
+      S.applyingRemote = false;
+      if (e.unknown) {
+        if (joining) { Y.code = ""; Y.since = null; Y.synced = {}; }
+        saveSync(); setSyncState("error", "That household code isn't recognised. Check the family link or the code and try again.");
+      } else { saveSync(); setSyncState("offline"); }
+      return false;
+    } finally {
+      Y.busy = false;
+      if (Y.again) { Y.again = false; syncNow(); }
+    }
+  }
+  let syncTimer = 0;
+  function scheduleSync() { if (!Y.code || !syncConfigured()) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 300); }
+  async function joinHousehold(code) {
+    code = String(code || "").trim();
+    if (!code || !syncConfigured()) return false;
+    Y.code = code; Y.since = null; Y.synced = {};
+    const ok = await syncNow(true);
+    if (ok) toast("Joined the household log.");
+    return ok;
+  }
+  function setSyncState(state, msg) { Y.state = state; Y.msg = msg || ""; renderSync(); }
+  function renderSync() {
+    const status = $("syncStatus"), head = $("syncState");
+    const time = Y.lastOk ? new Date(Y.lastOk).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
+    $("syncJoin").hidden = !syncConfigured() || !!Y.code;
+    $("syncLinkBox").hidden = !Y.code;
+    head.classList.toggle("bad", Y.state === "offline" || Y.state === "error");
+    if (!syncConfigured()) { status.textContent = "Sharing isn't set up for this app yet, so data stays on this device."; head.textContent = ""; return; }
+    if (!Y.code) { status.textContent = Y.msg || "This device isn't sharing yet. Open the family link, or enter the household code."; head.textContent = ""; return; }
+    $("syncLink").value = location.origin + location.pathname + "#join=" + encodeURIComponent(Y.code);
+    if (Y.state === "offline") { status.textContent = "Connected, but the shared log can't be reached right now. Changes stay on this device and are sent when you're back online."; head.textContent = "offline"; }
+    else if (Y.state === "error") { status.textContent = "Connected, but " + Y.msg.charAt(0).toLowerCase() + Y.msg.slice(1); head.textContent = "sync error"; }
+    else { status.textContent = "Connected. Everyone with the family link sees and edits the same log." + (time ? ` Last synced ${time}.` : ""); head.textContent = Y.state === "syncing" ? "syncing" : "synced"; }
+  }
+  $("syncConnect").addEventListener("click", () => joinHousehold($("syncCode").value));
+  $("syncCode").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); joinHousehold($("syncCode").value); } });
+  $("syncCopy").addEventListener("click", () => {
+    const link = $("syncLink").value;
+    Promise.resolve().then(() => navigator.clipboard.writeText(link)).then(() => toast("Family link copied."), () => { $("syncLink").select(); toast("Select and copy the link above."); });
+  });
+  $("syncLeave").addEventListener("click", () => {
+    Y.code = ""; Y.since = null; Y.synced = {}; Y.msg = ""; saveSync(); setSyncState("local");
+    toast("Disconnected. This device keeps its own copy.");
+  });
+  window.addEventListener("online", () => syncNow());
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncNow(); });
+  setInterval(() => { if (document.visibilityState === "visible") syncNow(); }, 30000);
+
   /* ---------- boot ---------- */
   function openLatestMonth() {
     const cur = ymOf(new Date());
@@ -1067,6 +1236,17 @@ input:focus, select:focus { border-color: var(--ink); outline: none; }
   new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderCharts); }).observe($("trendChart"));
   // keep other open tabs of the app in step
   window.addEventListener("storage", (e) => { if (e.key === STORE_KEY) { loadStore(); fillSettings(); render(); } });
+  loadSync(); renderSync();
+  // A family link (#join=CODE) joins this device, whether it opens the app or the app is already open.
+  function joinFromLink() {
+    const m = location.hash.match(/^#join=(.+)$/);
+    if (!m) return false;
+    history.replaceState(null, "", location.pathname + location.search);
+    joinHousehold(decodeURIComponent(m[1]));
+    return true;
+  }
+  window.addEventListener("hashchange", joinFromLink);
+  if (!joinFromLink()) syncNow();
 })();
 </script>
 </body>
