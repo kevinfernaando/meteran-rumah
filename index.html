@@ -292,6 +292,8 @@ details.settings[open] > summary::after { content: "–"; }
             <div class="radios">
               <label><input type="radio" name="hMode" id="hModeKwh" value="kwh" checked> kWh used</label>
               <label><input type="radio" name="hMode" id="hModeMeter" value="meter"> Meter reading</label>
+              <label><input type="radio" name="hMode" id="hModeBalance" value="balance"> Token balance</label>
+              <label><input type="radio" name="hMode" id="hModeTopup" value="topup"> Token top-up</label>
             </div>
           </div>
           <div class="row2">
@@ -299,7 +301,9 @@ details.settings[open] > summary::after { content: "–"; }
             <div class="field"><label for="hValue" id="hValueLbl">kWh used</label>
               <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
           </div>
-          <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. weekly reading, token top-up"></div>
+          <div class="field" id="hPaidField" hidden><label for="hPaid">Amount paid (optional)</label>
+            <div class="suffix"><input type="number" id="hPaid" min="0" step="1" inputmode="numeric" placeholder="e.g. 100000"><span>Rp</span></div></div>
+          <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. weekly reading"></div>
           <div class="estimate" id="hEstimate"></div>
           <button class="btn" type="submit" id="hSubmit">Save usage</button>
           <p class="status" id="hStatus" role="status"></p>
@@ -443,9 +447,11 @@ details.settings[open] > summary::after { content: "–"; }
       if (c.place === "public") { pubKwh += c.kwh; pubRp += r; }
       else { evHomeKwh += c.kwh; evHomeRp += r; if (offPeak) offKwh += c.kwh; }
     }
+    const tops = us.filter((u) => u.kind === "topup");
+    const topKwh = tops.reduce((a, u) => a + (u.tokenKwh || 0), 0), topPaid = tops.reduce((a, u) => a + (u.paidRp || 0), 0);
     const houseKwh = Math.max(0, meter - evHomeKwh);
     const houseRp = houseKwh * st.tariff * (1 + st.ppj / 100);
-    return { ym, meter, us, cs, houseKwh, houseRp, evHomeKwh, evHomeRp, pubKwh, pubRp, offKwh,
+    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, pubKwh, pubRp, offKwh,
       totalKwh: houseKwh + evHomeKwh + pubKwh, totalRp: houseRp + evHomeRp + pubRp,
       evOverMeter: evHomeKwh > meter + 0.001 };
   }
@@ -492,6 +498,7 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     let hint = `Home meter total ${kwh(A.meter)} minus home EV charging ${kwh(A.evHomeKwh)} = household ${kwh(A.houseKwh)}. PLN rate Rp ${numFmt2.format(st.tariff)}/kWh` +
       (st.ppj ? `, PPJ ${numFmt2.format(st.ppj)}%` : "") + (st.evDiscount ? `, EV night discount ${st.evDiscount}% (${hh(st.discFrom)}–${hh(st.discTo)}).` : ".");
+    if (A.tops.length) hint += ` Token top-ups this month: ${A.tops.length}, adding ${kwh(A.topKwh)}` + (A.topPaid ? ` for ${rp(A.topPaid)} paid.` : ".");
     if (A.evOverMeter) hint = "Home EV charging is higher than the meter total you logged this month, so household shows 0. Log your full meter usage to see the real split. " + hint;
     $("bdHint").textContent = hint;
   }
@@ -650,7 +657,18 @@ details.settings[open] > summary::after { content: "–"; }
       tr.children[0].textContent = fmtDate(d.date) + (d.time ? " " + d.time : "");
       const chip = document.createElement("span"); chip.className = "chip";
       let detail = d.note || "";
-      if (it.kind === "usage") {
+      let kwhText = numFmt1.format(d.kwh || 0);
+      const withNote = (main) => main + (d.note ? " (" + d.note + ")" : "");
+      if (it.kind === "usage" && d.kind === "topup") {
+        chip.innerHTML = `<i class="sw" style="background:var(--accent)"></i>Token top-up`;
+        kwhText = "+" + numFmt1.format(d.tokenKwh);
+        tr.children[4].textContent = d.paidRp ? rp(d.paidRp) : "—";
+        detail = withNote(d.paidRp ? `Paid ${rp(d.paidRp)}, Rp ${numFmt0.format(d.paidRp / d.tokenKwh)}/kWh` : "Token added");
+      } else if (it.kind === "usage" && d.kind === "balance") {
+        chip.innerHTML = `<i class="sw" style="background:var(--muted)"></i>Token meter`;
+        tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
+        detail = withNote("Remaining " + numFmt2.format(d.balance) + " kWh" + (d.baseline ? ", starting balance" : "") + (d.mismatch ? ", higher than expected: log the missing top-up" : ""));
+      } else if (it.kind === "usage") {
         chip.innerHTML = `<i class="sw" style="background:var(--muted)"></i>Meter`;
         tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
         if (d.reading != null) detail = "Reading " + numFmt2.format(d.reading) + (detail ? " (" + detail + ")" : "");
@@ -667,7 +685,7 @@ details.settings[open] > summary::after { content: "–"; }
       tr.children[1].append(chip);
       tr.children[2].textContent = detail;
       if (d.example) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Example"; tr.children[2].append(tg); }
-      tr.children[3].textContent = numFmt1.format(d.kwh || 0);
+      tr.children[3].textContent = kwhText;
       if (S.canWrite) {
         const b = document.createElement("button"); b.type = "button"; b.className = "del"; b.textContent = "Delete";
         b.addEventListener("click", () => {
@@ -717,10 +735,37 @@ details.settings[open] > summary::after { content: "–"; }
   function lastReadingBefore(date) {
     return S.usage.filter((u) => u.reading != null && u.date <= date).sort((a, b) => (a.date + (a.createdAt || "")).localeCompare(b.date + (b.createdAt || ""))).pop();
   }
+  const entryKey = (u) => u.date + (u.createdAt || "");
+  // Token meter: usage between two balance readings = previous remaining + top-ups in between − current remaining.
+  function tokenUsageAt(date, balance) {
+    const key = date + new Date().toISOString();
+    const seq = S.usage.filter((u) => (u.kind === "balance" || u.kind === "topup") && entryKey(u) <= key).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    let prev = null, added = 0;
+    for (const u of seq) {
+      if (u.kind === "balance") { prev = u; added = 0; } else if (prev) added += u.tokenKwh;
+    }
+    if (!prev) return { kwh: 0, balance, baseline: true };
+    return { kwh: prev.balance + added - balance, balance, prev, added };
+  }
+  function recomputeTokenUsage() {
+    const seq = S.usage.filter((u) => u.kind === "balance" || u.kind === "topup").sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    let prev = null, added = 0;
+    for (const u of seq) {
+      if (u.kind === "topup") { u.kwh = 0; if (prev != null) added += u.tokenKwh; continue; }
+      if (prev == null) { u.kwh = 0; u.baseline = true; u.mismatch = false; }
+      else {
+        const k = prev + added - u.balance;
+        u.kwh = Math.max(0, Math.round(k * 100) / 100); u.baseline = false; u.mismatch = k < -0.005;
+      }
+      prev = u.balance; added = 0;
+    }
+  }
   function homeComputed() {
     const v = parseFloat($("hValue").value), date = $("hDate").value || todayStr();
     if (!(v >= 0)) return null;
     if (hMode() === "kwh") return { kwh: v };
+    if (hMode() === "topup") return v > 0 ? { topup: true, tokenKwh: v, paid: parseFloat($("hPaid").value) || 0 } : null;
+    if (hMode() === "balance") return tokenUsageAt(date, v);
     const prev = lastReadingBefore(date);
     if (!prev) return { kwh: 0, reading: v, baseline: true };
     return { kwh: v - prev.reading, reading: v, prev };
@@ -728,8 +773,23 @@ details.settings[open] > summary::after { content: "–"; }
   function updateEstimates() {
     const st = S.settings;
     const h = homeComputed(), he = $("hEstimate");
-    $("hValueLbl").textContent = hMode() === "kwh" ? "kWh used" : "Meter reading";
-    if (!h) he.innerHTML = `<span>Estimated cost</span><strong>—</strong><span>At Rp ${numFmt2.format(st.tariff)}/kWh${st.ppj ? " + PPJ " + numFmt2.format(st.ppj) + "%" : ""}</span>`;
+    const mode = hMode();
+    $("hValueLbl").textContent = { kwh: "kWh used", meter: "Meter reading", balance: "Remaining kWh (sisa)", topup: "Token kWh bought" }[mode];
+    $("hPaidField").hidden = mode !== "topup";
+    $("hSubmit").textContent = { kwh: "Save usage", meter: "Save reading", balance: "Save balance", topup: "Save top-up" }[mode];
+    if (mode === "topup") {
+      he.innerHTML = `<span>Token top-up</span><strong></strong><span></span>`;
+      he.children[1].textContent = h ? "+" + kwh(h.tokenKwh) : "—";
+      he.children[2].textContent = h && h.paid ? `Rp ${numFmt0.format(h.paid / h.tokenKwh)} per kWh, including admin fee and taxes` : "Enter the kWh printed on your token receipt";
+    } else if (mode === "balance" && h && h.baseline) he.innerHTML = `<span>First token reading</span><strong>Starting balance</strong><span>Your next balance reading will be compared against this one, adding any top-ups in between.</span>`;
+    else if (mode === "balance" && h && h.kwh < 0) {
+      he.innerHTML = `<span>Check the balance</span><strong>Higher than expected</strong><span></span>`;
+      he.children[2].textContent = `Last reading was ${numFmt2.format(h.prev.balance)} kWh on ${fmtDate(h.prev.date)}` + (h.added ? ` plus ${numFmt2.format(h.added)} kWh topped up` : "") + ". If you bought a token since then, log the top-up first.";
+    } else if (mode === "balance" && h) {
+      he.innerHTML = `<span>Used since ${fmtDate(h.prev.date)}</span><strong></strong><span></span>`;
+      he.children[1].textContent = kwh(h.kwh) + ", " + rp(h.kwh * st.tariff * (1 + st.ppj / 100));
+      he.children[2].textContent = `${numFmt2.format(h.prev.balance)} kWh then` + (h.added ? ` + ${numFmt2.format(h.added)} kWh topped up` : "") + ` − ${numFmt2.format(h.balance)} kWh now. Includes any EV charging on this meter.`;
+    } else if (!h) he.innerHTML = `<span>Estimated cost</span><strong>—</strong><span>At Rp ${numFmt2.format(st.tariff)}/kWh${st.ppj ? " + PPJ " + numFmt2.format(st.ppj) + "%" : ""}</span>`;
     else if (h.baseline) he.innerHTML = `<span>First meter reading</span><strong>Baseline</strong><span>Saved as the starting point. Your next reading will be compared against it.</span>`;
     else if (h.kwh < 0) he.innerHTML = `<span>Check the reading</span><strong>${numFmt2.format(h.kwh)} kWh</strong><span>This is lower than your previous reading of ${numFmt2.format(h.prev.reading)} on ${fmtDate(h.prev.date)}.</span>`;
     else {
@@ -751,7 +811,9 @@ details.settings[open] > summary::after { content: "–"; }
 
   /* ---------- browser storage ---------- */
   const STORE_KEY = "meteran-rumah.v1";
-  const validEntry = (x) => x && typeof x === "object" && typeof x.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && typeof x.kwh === "number" && isFinite(x.kwh);
+  const validEntry = (x) => x && typeof x === "object" && typeof x.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && typeof x.kwh === "number" && isFinite(x.kwh)
+    && (x.kind !== "balance" || (typeof x.balance === "number" && isFinite(x.balance)))
+    && (x.kind !== "topup" || (typeof x.tokenKwh === "number" && isFinite(x.tokenKwh)));
   const newId = () => "e-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   function loadStore() {
     try {
@@ -760,10 +822,12 @@ details.settings[open] > summary::after { content: "–"; }
       S.usage = Array.isArray(data.usage) ? data.usage.filter(validEntry) : [];
       S.charges = Array.isArray(data.charges) ? data.charges.filter(validEntry) : [];
       S.settings = { ...DEFAULTS, ...(data.settings || {}) };
+      recomputeTokenUsage();
       S.storageOk = true;
     } catch { S.storageOk = false; }
   }
   function persist() {
+    recomputeTokenUsage();
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: S.charges }));
       S.storageOk = true; S.offlineMsg = "";
@@ -788,11 +852,24 @@ details.settings[open] > summary::after { content: "–"; }
     const h = homeComputed(), date = $("hDate").value;
     if (!date) return setStatus("hStatus", "Pick a date.", "err");
     if (!h) return setStatus("hStatus", "Enter a number of kWh.", "err");
-    if (h.kwh < 0) return setStatus("hStatus", "That reading is below the previous one. Check the meter and try again.", "err");
-    const doc = { date, kwh: Math.round(h.kwh * 100) / 100, note: $("hNote").value.trim(), createdAt: new Date().toISOString() };
-    if (h.reading != null) doc.reading = h.reading;
+    const mode = hMode(), note = $("hNote").value.trim(), createdAt = new Date().toISOString();
+    let doc, msg;
+    if (mode === "topup") {
+      doc = { date, kind: "topup", tokenKwh: Math.round(h.tokenKwh * 100) / 100, kwh: 0, note, createdAt };
+      if (h.paid > 0) doc.paidRp = Math.round(h.paid);
+      msg = "Top-up saved: +" + kwh(doc.tokenKwh) + ".";
+    } else if (mode === "balance") {
+      if (h.kwh < 0) return setStatus("hStatus", "The remaining kWh went up since your last reading. If you bought a token, log the top-up first, then the balance.", "err");
+      doc = { date, kind: "balance", balance: h.balance, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
+      msg = h.baseline ? "Starting balance saved." : "Saved " + kwh(doc.kwh) + " used.";
+    } else {
+      if (h.kwh < 0) return setStatus("hStatus", "That reading is below the previous one. Check the meter and try again.", "err");
+      doc = { date, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
+      if (h.reading != null) doc.reading = h.reading;
+      msg = h.baseline ? "Baseline reading saved." : "Saved " + kwh(doc.kwh) + ".";
+    }
     $("hSubmit").disabled = true;
-    try { await save("usage", doc); setStatus("hStatus", h.baseline ? "Baseline reading saved." : "Saved " + kwh(doc.kwh) + ".", "ok"); $("hValue").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
+    try { await save("usage", doc); setStatus("hStatus", msg, "ok"); $("hValue").value = ""; $("hPaid").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("hStatus", e.message, "err"); }
     finally { $("hSubmit").disabled = !S.canWrite; }
   });
@@ -907,6 +984,8 @@ details.settings[open] > summary::after { content: "–"; }
   ["hValue", "hDate"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   ["eKwh", "eTime", "ePrice"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   document.querySelectorAll('input[name="hMode"], input[name="ePlace"]').forEach((r) => r.addEventListener("change", updateEstimates));
+  document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.homeMode = r.value; persist(); }));
+  $("hPaid").addEventListener("input", updateEstimates);
 
   // month nav + unit
   $("prevMonth").addEventListener("click", () => { S.month = shiftYm(S.month, -1); render(); });
@@ -927,6 +1006,8 @@ details.settings[open] > summary::after { content: "–"; }
     $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sDisc").value = st.evDiscount;
     $("sFrom").value = hh(st.discFrom); $("sTo").value = hh(st.discTo); $("sPub").value = st.publicPrice;
     if (!$("ePrice").value) $("ePrice").placeholder = String(st.publicPrice);
+    const m = document.querySelector(`input[name="hMode"][value="${st.homeMode}"]`);
+    if (m) m.checked = true;
   }
   $("sPreset").addEventListener("change", () => { const v = $("sPreset").value; if (v !== "custom") $("sTariff").value = parseFloat(v); });
   $("sTariff").addEventListener("input", () => { $("sPreset").value = "custom"; });
@@ -934,7 +1015,7 @@ details.settings[open] > summary::after { content: "–"; }
     ev.preventDefault();
     const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
     const hr = (id, d) => { const v = $(id).value; return v ? parseInt(v.split(":")[0], 10) : d; };
-    const next = { tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0), evDiscount: Math.min(100, num("sDisc", 0)),
+    const next = { ...S.settings, tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0), evDiscount: Math.min(100, num("sDisc", 0)),
       discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo), publicPrice: num("sPub", DEFAULTS.publicPrice) };
     $("sSubmit").disabled = true;
     try {

@@ -3,6 +3,7 @@
 Track your home electricity and EV charging in kWh and Rupiah.
 
 - Log home usage as kWh used or as meter readings (the app works out the difference).
+- Prepaid token meters (prabayar): log the remaining kWh (sisa) and each token top-up; usage is worked out as last remaining + top-ups − current remaining, and recalculated if you delete an entry.
 - Log EV charging sessions at home or at a public SPKLU.
 - See each month split into household, EV at home and EV public, with costs at your PLN tariff, PPJ and the home-charging night discount.
 - Charts for the last 6 months and for EV charging day by day.

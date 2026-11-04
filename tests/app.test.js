@@ -115,3 +115,68 @@ test('the page fits a phone screen without sideways scrolling', async () => {
   assert.ok(w <= 390, `page is ${w}px wide`);
   await ctx.close();
 });
+
+/* ---------- prepaid token meter ---------- */
+async function logToken(page, mode, { date, value, paid }) {
+  await page.click('#tabHome');
+  await page.check(mode === 'balance' ? '#hModeBalance' : '#hModeTopup');
+  await page.fill('#hDate', date); await page.fill('#hValue', String(value));
+  if (paid != null) await page.fill('#hPaid', String(paid));
+  await page.click('#hSubmit');
+}
+const todayIn = (page) => page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+
+test('token meter: usage is last remaining plus top-ups minus current remaining', async () => {
+  const { ctx, page, errors } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'balance', { date: d, value: 50 });          // first reading = baseline
+  await logToken(page, 'topup', { date: d, value: 100, paid: 150000 });
+  await logToken(page, 'balance', { date: d, value: 120 });         // 50 + 100 − 120 = 30
+  assert.match(await text(page, '#kTotalSub'), /^30,0 kWh/);
+  const log = await text(page, '#histWrap');
+  assert.match(log, /Token top-up/);
+  assert.match(log, /Remaining 120 kWh/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('token meter: deleting a reading recalculates usage from the readings left', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'balance', { date: d, value: 50 });
+  await logToken(page, 'balance', { date: d, value: 40 });
+  await logToken(page, 'balance', { date: d, value: 25 });
+  assert.match(await text(page, '#kTotalSub'), /^25,0 kWh/);
+  const row = page.locator('#histWrap tr', { hasText: 'Remaining 40 kWh' });
+  await row.locator('.del').click(); await row.locator('.del').click();
+  assert.match(await text(page, '#kTotalSub'), /^25,0 kWh/);     // 50 − 25, still 25
+  assert.doesNotMatch(await text(page, '#histWrap'), /Remaining 40 kWh/);
+  await ctx.close();
+});
+
+test('token meter: a remaining balance that went up without a top-up is refused', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'balance', { date: d, value: 50 });
+  await logToken(page, 'balance', { date: d, value: 80 });
+  assert.match(await text(page, '#hStatus'), /top-up/i);
+  assert.doesNotMatch(await text(page, '#histWrap'), /Remaining 80 kWh/);
+  await ctx.close();
+});
+
+test('the home meter entry type is remembered after a reload', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#tabHome'); await page.check('#hModeBalance');
+  await page.reload();
+  assert.equal(await page.isChecked('#hModeBalance'), true);
+  await ctx.close();
+});
+
+test('saving tariff settings keeps the remembered home meter entry type', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#tabHome'); await page.check('#hModeBalance');
+  await page.click('#settingsBox summary'); await page.fill('#sPpj', '3'); await page.click('#sSubmit');
+  await page.reload();
+  assert.equal(await page.isChecked('#hModeBalance'), true);
+  await ctx.close();
+});
