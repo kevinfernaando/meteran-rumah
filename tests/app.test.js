@@ -235,7 +235,6 @@ test('charging between two readings is subtracted from the later reading, even a
   assert.match(await text(page, '#kHouseSub'), /^80,0 kWh/);                              // 100 − 20 charged on the last day of last month
   await page.click('#prevMonth');
   assert.match(await text(page, '#kEvHomeSub'), /^20,0 kWh/);                            // the charge still costs last month
-  assert.doesNotMatch(await text(page, '#bdHint'), /higher than the meter/i);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -247,10 +246,8 @@ test('the time of day decides which reading a same-day charge belongs to', async
   await logEv(page, { date: d, time: '22:30', kwh: 10 });
   await logMeter(page, { date: d, time: '21:00', kwh: 25 });            // 25 used, charge is later
   assert.match(await text(page, '#kHouseSub'), /^25,0 kWh/);
-  assert.match(await text(page, '#bdHint'), /10,0 kWh of charging since your last reading/);
   await logMeter(page, { date: d, time: '23:30', kwh: 10 });            // 15 used, 10 of it the car
   assert.match(await text(page, '#kHouseSub'), /^30,0 kWh/);                              // 25 + (15 − 10)
-  assert.doesNotMatch(await text(page, '#bdHint'), /since your last reading/);
   await ctx.close();
 });
 
@@ -443,5 +440,34 @@ test('settings explain that each device keeps its own copy of the data', async (
   const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
   await page.click('#settingsBtn');
   assert.match(await text(page, '#sheetSettings'), /this device/i);
+  await ctx.close();
+});
+
+/* ---------- calmer layout ---------- */
+test('the summary has no explanation note under it', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  assert.equal(await page.locator('#bdHint').count(), 0);
+  assert.doesNotMatch(await page.locator('main').innerText(), /Household = meter/);
+  await ctx.close();
+});
+
+test('Charge car is the primary button and both labels are centred', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  assert.match(await page.getAttribute('#tabEv', 'class'), /act-primary/);
+  assert.doesNotMatch(await page.getAttribute('#tabHome', 'class'), /act-primary/);
+  for (const id of ['#tabEv', '#tabHome']) assert.equal(await page.$eval(id, (b) => getComputedStyle(b).textAlign), 'center');
+  await ctx.close();
+});
+
+test('chart axis labels stay inside the chart', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  await page.evaluate(() => document.fonts.ready);
+  const out = await page.$$eval('#trendChart .axis text', (ts) => {
+    const box = document.querySelector('#trendChart').getBoundingClientRect();
+    return ts.filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5; }).map((t) => t.textContent);
+  });
+  assert.deepEqual(out, []);
   await ctx.close();
 });
