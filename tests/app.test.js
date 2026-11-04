@@ -61,7 +61,7 @@ test('entries are saved in the browser and survive a reload', async () => {
   const today = await page.evaluate(() => new Date().toISOString().slice(0, 10));
   await logEv(page, { date: today, time: '22:30', kwh: 20 });
   await page.reload();
-  assert.match(await text(page, '#histWrap'), /EV home/);
+  assert.match(await text(page, '#histWrap'), /EV charge/);
   assert.equal(await text(page, '#kEvHome'), 'Rp 28.894'); // 20 kWh × Rp 1.444,70, same rate as the house
   await ctx.close();
 });
@@ -81,6 +81,7 @@ test('export downloads a JSON backup that import restores in another browser', a
   const a = await freshPage();
   const today = await a.page.evaluate(() => new Date().toISOString().slice(0, 10));
   await logEv(a.page, { date: today, time: '23:00', kwh: 12.5 });
+  await a.page.click('#settingsBtn');
   const [dl] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#exportBtn')]);
   const file = path.join(require('node:os').tmpdir(), `meteran-backup-${Date.now()}.json`);
   await dl.saveAs(file); // keep a copy: Playwright deletes downloads when the browser closes
@@ -90,8 +91,9 @@ test('export downloads a JSON backup that import restores in another browser', a
   await a.ctx.close();
 
   const b = await freshPage();
+  await b.page.click('#settingsBtn');
   await b.page.setInputFiles('#importFile', file);
-  await b.page.waitForFunction(() => document.querySelector('#histWrap').innerText.includes('EV home'));
+  await b.page.waitForFunction(() => document.querySelector('#histWrap').innerText.includes('EV charge'));
   assert.match(await text(b.page, '#importStatus'), /Imported 1 entr/);
   await b.ctx.close();
 });
@@ -151,7 +153,7 @@ test('token meter: deleting a reading recalculates usage from the readings left'
   await logToken(page, 'balance', { date: d, value: 40 });
   await logToken(page, 'balance', { date: d, value: 25 });
   assert.match(await text(page, '#kTotalSub'), /^25,0 kWh/);
-  const row = page.locator('#histWrap tr', { hasText: 'Remaining 40 kWh' });
+  const row = page.locator('#histWrap li', { hasText: 'Remaining 40 kWh' });
   await row.locator('.del').click(); await row.locator('.del').click();
   assert.match(await text(page, '#kTotalSub'), /^25,0 kWh/);     // 50 − 25, still 25
   assert.doesNotMatch(await text(page, '#histWrap'), /Remaining 40 kWh/);
@@ -179,7 +181,8 @@ test('the home meter entry type is remembered after a reload', async () => {
 test('saving tariff settings keeps the remembered home meter entry type', async () => {
   const { ctx, page } = await freshPage();
   await page.click('#tabHome'); await page.check('#hModeBalance');
-  await page.click('#settingsBox summary'); await page.fill('#sPpj', '3'); await page.click('#sSubmit');
+  await page.keyboard.press('Escape');
+  await page.click('#settingsBtn'); await page.fill('#sPpj', '3'); await page.click('#sSubmit');
   await page.reload();
   assert.equal(await page.isChecked('#hModeBalance'), true);
   await ctx.close();
@@ -212,7 +215,7 @@ test('public sessions saved by an older version are left out of totals', async (
   await page.reload();
   assert.equal(await text(page, '#kTotal'), 'Rp 28.894');
   assert.match(await text(page, '#kTotalSub'), /^20,0 kWh/);
-  assert.equal(await page.locator('#histWrap tbody tr').count(), 1);
+  assert.equal(await page.locator('#histWrap li').count(), 1);
   await ctx.close();
 });
 
@@ -283,7 +286,7 @@ test('a charge that ends lower than it started is refused', async () => {
 
 test('battery size and charging efficiency can be changed in settings', async () => {
   const { ctx, page } = await freshPage();
-  await page.click('#settingsBox summary');
+  await page.click('#settingsBtn');
   await page.fill('#sBattery', '50'); await page.fill('#sEff', '100'); await page.click('#sSubmit');
   const d = await todayIn(page);
   await logSoc(page, { date: d, time: '22:30', from: 10, to: 60 });   // 50% of 50 kWh at 100%
@@ -409,5 +412,36 @@ test('charging costs the same per kWh at any time of day', async () => {
   assert.equal(await text(page, '#kEvHome'), 'Rp 28.894');               // 20 × 1.444,70, no discount for either
   assert.doesNotMatch(await page.locator('body').innerText(), /night|discount/i);
   assert.equal(await page.locator('#sDisc, #sFrom, #sTo').count(), 0);
+  await ctx.close();
+});
+
+/* ---------- mobile layout: bottom actions and sheets ---------- */
+test('saving from a sheet closes it and confirms what was saved', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  const d = await todayIn(page);
+  await page.click('#tabHome');
+  assert.equal(await page.locator('#sheetHome').isVisible(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#sheetHome').isHidden(), true);
+  await logToken(page, 'topup', { date: d, before: 40, token: 100 });
+  assert.equal(await page.locator('#sheetHome').isHidden(), true);
+  assert.match(await text(page, '#toast'), /saved/i);
+  await ctx.close();
+});
+
+test('while a charge is open the bottom button offers to finish it', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  const d = await todayIn(page);
+  await startCharge(page, { date: d, time: '22:30', from: 20 });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#sheetEv').isHidden(), true);
+  assert.match(await text(page, '#tabEv'), /Finish charging/);
+  await ctx.close();
+});
+
+test('settings explain that each device keeps its own copy of the data', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#settingsBtn');
+  assert.match(await text(page, '#sheetSettings'), /this device/i);
   await ctx.close();
 });

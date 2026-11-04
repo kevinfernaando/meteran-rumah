@@ -14,106 +14,98 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&family=Atkinson+Hyperlegible+Mono:wght@500;600&display=swap">
 <style>
-/* Layout: a meter-panel ledger — month header, readout strip, charts left / logging console right, history + tariff settings below. */
+/* Layout: one phone-width column. The month's numbers sit in a dark "meter display" card (the one bold element);
+   everything else is quiet. Logging lives in two thumb-reach buttons that open bottom sheets. */
 :root {
-  --bg: #f2f4f6;
+  --bg: #f3f5f7;
   --surface: #ffffff;
-  --sunken: #e9edf1;
-  --ink: #10161d;
-  --ink-2: #47525e;
-  --muted: #6f7a86;
-  --line: #d9dfe5;
+  --sunken: #eaeef2;
+  --ink: #0f161d;
+  --ink-2: #46515c;
+  --muted: #6c7783;
+  --line: #dde3e8;
   --accent: #1d3f66;
   --accent-ink: #ffffff;
   --s1: #2a78d6;   /* household */
-  --s2: #eb6834;   /* EV at home */
-  --good: #0ca30c;
+  --s2: #eb6834;   /* EV charging */
+  --lcd-bg: #15222c; --lcd-ink: #eaf3f1; --lcd-dim: #93a7ab; --lcd-line: #2b3c48;
+  --lcd-s1: #3987e5; --lcd-s2: #d95926;
+  --good: #0a8a0a;
   --critical: #d03b3b;
   --warn-bg: #fff4dc;
   --warn-ink: #6b4a00;
-  /* Atkinson Hyperlegible: built for telling 0/O and 1/l apart, which matters when reading a meter. Mono cut only for the big readout figures. */
+  --scrim: rgb(9 14 19 / .45);
+  /* Atkinson Hyperlegible: built for telling 0/O and 1/l apart, which matters when reading a meter. Mono cut only for the readout figures. */
   --f-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-display: var(--f-body);
   --f-num: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --r: 6px;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0e1215; --surface: #171c21; --sunken: #1f252b; --ink: #eef1f4; --ink-2: #b6bfc9; --muted: #8b95a0;
-  --line: #2b333b; --accent: #9dbdf0; --accent-ink: #0e1215;
-  --s1: #3987e5; --s2: #d95926; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; } }
+  --bg: #0d1114; --surface: #161b20; --sunken: #1e252c; --ink: #eef1f4; --ink-2: #b4bdc7; --muted: #8a949f;
+  --line: #2a323a; --accent: #9dbdf0; --accent-ink: #0d1114; --s1: #3987e5; --s2: #d95926;
+  --lcd-bg: #0a1317; --lcd-line: #23323b; --good: #3fbf3f; --warn-bg: #3a2f14; --warn-ink: #f3d58f; --scrim: rgb(0 0 0 / .6); color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #0e1215; --surface: #171c21; --sunken: #1f252b; --ink: #eef1f4; --ink-2: #b6bfc9; --muted: #8b95a0;
-  --line: #2b333b; --accent: #9dbdf0; --accent-ink: #0e1215;
-  --s1: #3987e5; --s2: #d95926; --warn-bg: #3a2f14; --warn-ink: #f3d58f; color-scheme: dark; }
+  --bg: #0d1114; --surface: #161b20; --sunken: #1e252c; --ink: #eef1f4; --ink-2: #b4bdc7; --muted: #8a949f;
+  --line: #2a323a; --accent: #9dbdf0; --accent-ink: #0d1114; --s1: #3987e5; --s2: #d95926;
+  --lcd-bg: #0a1317; --lcd-line: #23323b; --good: #3fbf3f; --warn-bg: #3a2f14; --warn-ink: #f3d58f; --scrim: rgb(0 0 0 / .6); color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+:root { padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+body.locked { overflow: hidden; }
 [hidden] { display: none !important; }
-:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  display: grid; gap: 20px; }
-h1, h2, h3 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
-h1 { font-size: 1.75rem; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
-h2 { font-size: 1.2rem; }
-.num { font-variant-numeric: tabular-nums; }
-.label { font-size: .85rem; color: var(--ink-2); font-weight: 500; }
+h1, h2 { margin: 0; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
 button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* header */
-.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-.brand { display: grid; gap: 4px; }
-.brand p { margin: 0; color: var(--ink-2); font-size: .92rem; }
-.monthnav { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 4px; }
-.monthnav button { border: 0; background: transparent; width: 34px; height: 34px; border-radius: 4px; cursor: pointer; font-size: 1.1rem; color: var(--ink-2); }
+.app { max-width: 560px; margin: 0 auto; padding: 12px var(--gutter-r) calc(112px + env(safe-area-inset-bottom, 0px)) var(--gutter-l); display: grid; gap: 14px; }
+.app > * { min-width: 0; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.top h1 { font-size: 1.3rem; font-weight: 800; letter-spacing: -.02em; }
+.iconbtn { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 12px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.iconbtn:hover { background: var(--sunken); }
+.iconbtn svg { width: 22px; height: 22px; }
+
+.monthnav { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
+.monthnav button { height: 44px; border: 0; border-radius: 12px; background: transparent; font-size: 1.4rem; color: var(--ink-2); cursor: pointer; }
 .monthnav button:hover { background: var(--sunken); }
-.monthnav button:disabled { opacity: .35; cursor: default; background: transparent; }
-#monthLabel { font-family: var(--f-display); font-weight: 600; min-width: 9.5em; text-align: center; font-size: 1.02rem; }
+.monthnav button:disabled { opacity: .3; cursor: default; background: transparent; }
+#monthLabel { text-align: center; font-weight: 700; font-size: 1.05rem; }
 
-.notice { border-radius: var(--r); padding: 10px 14px; background: var(--warn-bg); color: var(--warn-ink); font-size: .9rem; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
-.notice button { border: 1px solid currentColor; background: transparent; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: .85rem; }
+.notice { border-radius: 14px; padding: 12px 14px; background: var(--warn-bg); color: var(--warn-ink); font-size: .92rem; display: grid; gap: 10px; }
+.notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.notice button { border: 1px solid currentColor; background: transparent; border-radius: 10px; padding: 8px 12px; cursor: pointer; font-size: .9rem; font-weight: 600; }
 
-/* readout strip */
-.readout { display: grid; grid-template-columns: 1.4fr 1fr 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-.readout > div { padding: 16px 18px; display: grid; gap: 2px; align-content: start; min-width: 0; }
-.readout > div + div { border-left: 1px solid var(--line); }
-.readout .big { font-family: var(--f-num); font-weight: 600; font-size: 2rem; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.readout .mid { font-family: var(--f-num); font-weight: 600; font-size: 1.35rem; letter-spacing: -.03em; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.readout .sub { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.key { display: inline-flex; align-items: center; gap: 6px; }
-.sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
-
-/* main grid */
-.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
-.wrap > *, .panel > * { min-width: 0; }
-.col { display: grid; gap: 20px; min-width: 0; }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0; }
-.panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
-.panel-head p { margin: 0; color: var(--muted); font-size: .85rem; }
-
-/* segmented control */
-.seg { display: inline-flex; background: var(--sunken); border-radius: 5px; padding: 3px; gap: 2px; }
-.seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: .85rem; color: var(--ink-2); font-weight: 500; }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
-
-/* breakdown */
-.split { display: flex; height: 26px; gap: 2px; border-radius: 4px; overflow: hidden; background: var(--sunken); }
+/* the meter display */
+.lcd { background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 20px; padding: 18px 18px 16px; display: grid; gap: 4px; border: 1px solid var(--lcd-line); }
+.lcd .cap { color: var(--lcd-dim); font-size: .9rem; }
+.lcd .big { font-family: var(--f-num); font-weight: 600; font-size: clamp(2rem, 9vw, 2.6rem); line-height: 1.1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.split { display: flex; height: 8px; gap: 2px; border-radius: 4px; overflow: hidden; background: var(--lcd-line); margin: 12px 0 6px; }
 .split div { min-width: 0; transition: flex-grow .3s ease; }
-.split .s1 { background: var(--s1); } .split .s2 { background: var(--s2); }
-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-th { text-align: left; font-weight: 500; color: var(--muted); font-size: .8rem; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
-td.mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
-tfoot td { font-weight: 600; border-bottom: 0; }
-.tablewrap { overflow-x: auto; }
-.hint { margin: 0; font-size: .82rem; color: var(--muted); }
+.split .s1 { background: var(--lcd-s1); } .split .s2 { background: var(--lcd-s2); }
+.lcd-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding-top: 8px; }
+.lcd-row .key { font-size: .95rem; }
+.lcd-row .v { font-family: var(--f-num); font-weight: 600; font-size: 1.05rem; letter-spacing: -.03em; text-align: right; font-variant-numeric: tabular-nums; }
+.lcd-row .u { grid-column: 2; text-align: right; font-size: .82rem; color: var(--lcd-dim); font-variant-numeric: tabular-nums; }
+.lcd .sw.s1 { background: var(--lcd-s1); } .lcd .sw.s2 { background: var(--lcd-s2); }
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
+.hint { margin: -4px 4px 0; font-size: .84rem; color: var(--muted); }
 
-/* charts */
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--ink-2); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card > * { min-width: 0; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.card-head h2 { font-size: 1.05rem; }
+.card-head p { margin: 0; color: var(--muted); font-size: .85rem; }
+.seg { display: inline-flex; background: var(--sunken); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: .85rem; color: var(--ink-2); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .84rem; color: var(--ink-2); }
+
+/* chart */
 .chart { position: relative; width: 100%; }
 .chart svg { display: block; width: 100%; overflow: visible; }
 .chart .grid line { stroke: var(--line); stroke-width: 1; }
@@ -122,280 +114,253 @@ tfoot td { font-weight: 600; border-bottom: 0; }
 .chart .band { fill: var(--ink); opacity: 0; }
 .chart .band.on { opacity: .06; }
 .chart .hit { fill: transparent; cursor: crosshair; }
-.chart .sel-tick { fill: var(--ink); font-weight: 600; }
+.chart .sel-tick { fill: var(--ink); font-weight: 700; }
 .chart .empty { fill: var(--muted); font-family: var(--f-body); font-size: 13px; }
-.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 5px; padding: 8px 10px; font-size: .8rem; line-height: 1.45; min-width: 150px; z-index: 5; box-shadow: 0 4px 14px rgb(0 0 0 / .2); }
-.tip b { font-family: var(--f-display); font-weight: 600; display: block; margin-bottom: 2px; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 8px 10px; font-size: .8rem; line-height: 1.45; min-width: 150px; z-index: 5; box-shadow: 0 4px 14px rgb(0 0 0 / .2); }
+.tip b { display: block; margin-bottom: 2px; }
 .tip .row { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
 .tip .row span:first-child { display: inline-flex; align-items: center; gap: 6px; }
 
-/* forms */
-.tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); margin: -4px -18px 0; padding: 0 18px; }
-.tabs button { border: 0; background: transparent; padding: 10px 4px; cursor: pointer; font-family: var(--f-display); font-weight: 600; font-size: .95rem; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-form { display: grid; gap: 12px; }
-.field { display: grid; gap: 4px; min-width: 0; }
-.field label, .field .lbl { font-size: .8rem; font-weight: 500; color: var(--ink-2); }
+/* entries */
+.entries { list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 36px; gap: 4px 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.entry:first-child { border-top: 0; padding-top: 2px; }
+.entry .sw { align-self: start; margin-top: 7px; }
+.entry-main { display: grid; min-width: 0; }
+.entry-main b { font-weight: 700; font-size: .98rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-sub { font-size: .84rem; color: var(--muted); overflow-wrap: anywhere; }
+.entry-num { display: grid; text-align: right; font-variant-numeric: tabular-nums; }
+.entry-num b { font-weight: 700; font-size: .95rem; }
+.entry-num span { font-size: .82rem; color: var(--muted); }
+.tag { font-size: .72rem; font-weight: 600; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 0 5px; margin-left: 6px; white-space: nowrap; }
+.del { width: 36px; height: 36px; border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 10px; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+.del:hover { border-color: var(--line); color: var(--ink); }
+.del.armed { width: auto; min-width: 36px; padding: 0 6px; border-color: var(--critical); color: var(--critical); font-size: .78rem; font-weight: 700; }
+.emptybox { padding: 18px 6px; text-align: center; color: var(--ink-2); display: grid; gap: 4px; }
+.emptybox strong { font-size: 1.02rem; color: var(--ink); }
+
+/* bottom actions */
+.actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line); padding: 10px var(--gutter-r) calc(10px + env(safe-area-inset-bottom, 0px)) var(--gutter-l); }
+.actionbar-in { max-width: 528px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.act { min-height: 54px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 700; font-size: 1rem; cursor: pointer; display: grid; place-content: center; line-height: 1.2; padding: 6px 10px; }
+.act small { font-weight: 500; font-size: .78rem; color: var(--muted); }
+.act-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.act.charging { border-color: var(--s2); background: color-mix(in srgb, var(--s2) 12%, var(--surface)); }
+
+/* sheets */
+#backdrop { position: fixed; inset: 0; background: var(--scrim); z-index: 20; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 560px; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; z-index: 30;
+  background: var(--surface); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 30px rgb(0 0 0 / .18);
+  padding: 8px var(--gutter-r) calc(20px + env(safe-area-inset-bottom, 0px)) var(--gutter-l); animation: rise .2s ease-out; }
+@keyframes rise { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+.sheet::before { content: ""; display: block; width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 6px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sheet-head h2 { font-size: 1.2rem; }
+.sheet-close { border: 0; background: var(--sunken); border-radius: 10px; padding: 8px 12px; font-weight: 600; font-size: .9rem; cursor: pointer; color: var(--ink-2); }
+.sheet h3 { margin: 18px 0 0; font-size: 1rem; }
+
+form { display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label, .field .lbl { font-size: .86rem; font-weight: 600; color: var(--ink-2); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 input[type="text"], input[type="number"], input[type="date"], input[type="time"], select {
-  width: 100%; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; font-size: .95rem; }
-input:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+  width: 100%; min-width: 0; min-height: 48px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 16px; }
+input:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .suffix { position: relative; }
-.suffix input { padding-right: 52px; }
-.suffix span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: .8rem; color: var(--muted); pointer-events: none; }
-.radios { display: flex; gap: 6px; flex-wrap: wrap; }
-.radios label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: .88rem; color: var(--ink); }
-.radios label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.radios input { accent-color: var(--accent); margin: 0; }
-.estimate { background: var(--sunken); border-radius: 5px; padding: 10px 12px; font-size: .86rem; color: var(--ink-2); display: grid; gap: 2px; }
-.estimate strong { font-family: var(--f-num); letter-spacing: -.02em; font-size: 1.15rem; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.btn { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 5px; padding: 10px 14px; font-weight: 600; cursor: pointer; font-size: .95rem; }
-.btn:hover { filter: brightness(1.1); }
+.suffix input { padding-right: 64px; }
+.suffix span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: .85rem; color: var(--muted); pointer-events: none; }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice label { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; cursor: pointer; font-weight: 600; font-size: .95rem; color: var(--ink-2); }
+.choice label:has(input:checked) { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.choice input { accent-color: var(--accent); margin: 0; }
+.estimate { background: var(--sunken); border-radius: 14px; padding: 12px 14px; font-size: .88rem; color: var(--ink-2); display: grid; gap: 2px; }
+.estimate strong { font-family: var(--f-num); letter-spacing: -.02em; font-size: 1.2rem; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.btn { min-height: 52px; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 14px; padding: 12px 16px; font-weight: 700; cursor: pointer; font-size: 1rem; }
+.btn:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: .5; cursor: default; filter: none; }
 .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-.status { font-size: .84rem; min-height: 1.3em; margin: 0; color: var(--ink-2); }
+.btn.ghost.armed { border-color: var(--critical); color: var(--critical); }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.status { font-size: .88rem; min-height: 1.3em; margin: 0; color: var(--ink-2); }
 .status.ok { color: var(--good); } .status.err { color: var(--critical); }
-
-/* history */
-.chip { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 500; white-space: nowrap; }
-.tag { font-size: .72rem; font-weight: 500; border: 1px solid var(--line); color: var(--muted); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
-.del { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: .8rem; white-space: nowrap; }
-.del:hover { border-color: var(--line); color: var(--ink); }
-.del.armed, .btn.ghost.armed { border-color: var(--critical); color: var(--critical); }
-.emptybox { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--ink-2); display: grid; gap: 4px; }
-.active-charge { display: grid; gap: 10px; border: 1px solid var(--s2); border-radius: var(--r); padding: 14px; background: color-mix(in srgb, var(--s2) 7%, var(--surface)); }
+.active-charge { display: grid; gap: 12px; border: 1px solid var(--s2); border-radius: 16px; padding: 14px; background: color-mix(in srgb, var(--s2) 7%, var(--surface)); }
 .active-charge > strong { font-size: 1.05rem; }
-#eFormBody { display: grid; gap: 12px; }
-.notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.emptybox .btn { justify-self: center; margin-top: 8px; }
-.data-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
-.filebtn { position: relative; overflow: hidden; display: inline-flex; align-items: center; cursor: pointer; }
+#eFormBody { display: grid; gap: 14px; }
+.filebtn { position: relative; overflow: hidden; display: inline-grid; place-items: center; cursor: pointer; }
 .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.emptybox strong { font-family: var(--f-display); font-size: 1.05rem; color: var(--ink); }
+.small { margin: 0; font-size: .85rem; color: var(--muted); }
 
-details.settings > summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-details.settings > summary::-webkit-details-marker { display: none; }
-details.settings > summary::after { content: "+"; font-family: var(--f-display); font-size: 1.2rem; color: var(--muted); }
-details.settings[open] > summary::after { content: "–"; }
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 16px; margin-top: 14px; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: max-content; max-width: calc(100% - 32px);
+  background: var(--ink); color: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: .9rem; box-shadow: 0 6px 20px rgb(0 0 0 / .2); }
 
-@media (max-width: 920px) {
-  .main { grid-template-columns: minmax(0, 1fr); }
-  .readout { grid-template-columns: 1fr 1fr; }
-  .readout > div:first-child { grid-column: 1 / -1; }
-  .readout > div + div { border-left: 0; border-top: 1px solid var(--line); }
-  .readout > div:nth-child(3) { border-left: 1px solid var(--line); }
-}
-@media (max-width: 520px) {
-  .readout { grid-template-columns: 1fr; }
-  .readout > div:nth-child(3) { border-left: 0; }
-  .readout .big { font-size: 1.75rem; }
-  h1 { font-size: 1.4rem; }
-  .row2 { grid-template-columns: 1fr; }
-}
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="app">
   <header class="top">
-    <div class="brand">
-      <h1>Meteran Rumah</h1>
-      <p>Home electricity and EV charging, in kWh and Rupiah.</p>
-    </div>
-    <nav class="monthnav" aria-label="Month">
-      <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
-      <span id="monthLabel" aria-live="polite">—</span>
-      <button type="button" id="nextMonth" aria-label="Next month">›</button>
-    </nav>
+    <h1>Meteran Rumah</h1>
+    <button type="button" class="iconbtn" id="settingsBtn" aria-label="Settings" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
   </header>
+
+  <nav class="monthnav" aria-label="Month">
+    <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
+    <span id="monthLabel" aria-live="polite">—</span>
+    <button type="button" id="nextMonth" aria-label="Next month">›</button>
+  </nav>
 
   <div class="notice" id="notice" hidden></div>
 
-  <section class="readout" aria-label="Month summary">
-    <div>
-      <span class="label">Total cost this month</span>
-      <span class="big" id="kTotal">Rp 0</span>
-      <span class="sub" id="kTotalSub">0 kWh</span>
+  <section class="lcd" aria-label="This month's electricity">
+    <span class="cap">Spent this month</span>
+    <span class="big" id="kTotal">Rp 0</span>
+    <span class="cap" id="kTotalSub">0,0 kWh</span>
+    <div class="split" id="split" role="img" aria-label="Household and EV charging share of the cost"></div>
+    <div class="lcd-row"><span class="key"><i class="sw s1"></i>Household</span><span class="v" id="kHouse">Rp 0</span><span class="u" id="kHouseSub">0,0 kWh</span></div>
+    <div class="lcd-row"><span class="key"><i class="sw s2"></i>EV charging</span><span class="v" id="kEvHome">Rp 0</span><span class="u" id="kEvHomeSub">0,0 kWh</span></div>
+  </section>
+  <p class="hint" id="bdHint"></p>
+
+  <section class="card" aria-labelledby="trendTitle">
+    <div class="card-head">
+      <h2 id="trendTitle">Last 6 months</h2>
+      <div class="seg" role="group" aria-label="Chart unit">
+        <button type="button" data-unit="rp" aria-pressed="true">Rp</button>
+        <button type="button" data-unit="kwh" aria-pressed="false">kWh</button>
+      </div>
     </div>
-    <div>
-      <span class="label key"><i class="sw s1"></i>Household</span>
-      <span class="mid" id="kHouse">Rp 0</span>
-      <span class="sub" id="kHouseSub">0 kWh</span>
+    <div class="legend">
+      <span class="key"><i class="sw s1"></i>Household</span>
+      <span class="key"><i class="sw s2"></i>EV charging</span>
     </div>
-    <div>
-      <span class="label key"><i class="sw s2"></i>EV at home</span>
-      <span class="mid" id="kEvHome">Rp 0</span>
-      <span class="sub" id="kEvHomeSub">0 kWh</span>
-    </div>
+    <div class="chart" id="trendChart"></div>
   </section>
 
-  <div class="main">
-    <div class="col">
-      <section class="panel" aria-labelledby="bdTitle">
-        <div class="panel-head">
-          <h2 id="bdTitle">Breakdown</h2>
-          <p id="bdNote">Share of this month's cost</p>
-        </div>
-        <div class="split" id="split" role="img" aria-label="Cost share by category"></div>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Category</th><th class="r">kWh</th><th class="r">Avg Rp/kWh</th><th class="r">Cost</th><th class="r">Share</th></tr></thead>
-            <tbody id="bdBody"></tbody>
-            <tfoot id="bdFoot"></tfoot>
-          </table>
-        </div>
-        <p class="hint" id="bdHint"></p>
-      </section>
-
-      <section class="panel" aria-labelledby="trendTitle">
-        <div class="panel-head">
-          <h2 id="trendTitle">Last 6 months</h2>
-          <div class="seg" role="group" aria-label="Chart unit">
-            <button type="button" data-unit="rp" aria-pressed="true">Rupiah</button>
-            <button type="button" data-unit="kwh" aria-pressed="false">kWh</button>
-          </div>
-        </div>
-        <div class="legend">
-          <span class="key"><i class="sw s1"></i>Household</span>
-          <span class="key"><i class="sw s2"></i>EV at home</span>
-        </div>
-        <div class="chart" id="trendChart"></div>
-      </section>
-
-      <section class="panel" aria-labelledby="dailyTitle">
-        <div class="panel-head">
-          <h2 id="dailyTitle">EV charging at home by day</h2>
-          <p id="dailyNote">Sessions in the selected month</p>
-        </div>
-        <div class="chart" id="dailyChart"></div>
-      </section>
-    </div>
-
-    <div class="col">
-      <section class="panel" aria-label="Log an entry">
-        <div class="tabs" role="tablist">
-          <button type="button" role="tab" id="tabHome" aria-selected="true" aria-controls="formHome">Home meter</button>
-          <button type="button" role="tab" id="tabEv" aria-selected="false" aria-controls="formEv">EV charging</button>
-        </div>
-
-        <form id="formHome" role="tabpanel" aria-labelledby="tabHome" novalidate>
-          <div class="field">
-            <span class="lbl">What are you entering?</span>
-            <div class="radios">
-              <label><input type="radio" name="hMode" id="hModeBalance" value="balance"> Meter reading</label>
-              <label><input type="radio" name="hMode" id="hModeTopup" value="topup" checked> Token top-up</label>
-            </div>
-          </div>
-          <div class="row2">
-            <div class="field"><label for="hDate">Date</label><input type="date" id="hDate" required></div>
-            <div class="field"><label for="hTime">Time</label><input type="time" id="hTime" required></div>
-          </div>
-          <div class="field"><label for="hValue" id="hValueLbl">kWh left before topping up</label>
-            <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
-          <div class="field" id="hTokenField"><label for="hToken">Token kWh (from the receipt)</label>
-            <div class="suffix"><input type="number" id="hToken" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
-          <div class="field" id="hPaidField" hidden><label for="hPaid">Amount paid (optional)</label>
-            <div class="suffix"><input type="number" id="hPaid" min="0" step="1" inputmode="numeric" placeholder="e.g. 100000"><span>Rp</span></div></div>
-          <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. Rp 500.000 token"></div>
-          <div class="estimate" id="hEstimate"></div>
-          <button class="btn" type="submit" id="hSubmit">Save usage</button>
-          <p class="status" id="hStatus" role="status"></p>
-        </form>
-
-        <form id="formEv" role="tabpanel" aria-labelledby="tabEv" hidden novalidate>
-          <div class="active-charge" id="eActive" hidden>
-            <strong>Charging now</strong>
-            <span id="eActiveInfo"></span>
-            <div class="field"><label for="eFinishTo">Battery when you unplug</label>
-              <div class="suffix"><input type="number" id="eFinishTo" min="0" max="100" step="1" inputmode="numeric" placeholder="80"><span>%</span></div></div>
-            <div class="estimate" id="eActiveEst"></div>
-            <div class="data-actions">
-              <button class="btn" type="button" id="eFinish">Finish charging</button>
-              <button class="btn ghost" type="button" id="eDiscard">Discard</button>
-            </div>
-          </div>
-          <div id="eFormBody">
-          <div class="field">
-            <span class="lbl">How do you want to log it?</span>
-            <div class="radios">
-              <label><input type="radio" name="eMode" id="eModeSoc" value="soc" checked> Battery %</label>
-              <label><input type="radio" name="eMode" id="eModeKwh" value="kwh"> kWh from charger</label>
-            </div>
-          </div>
-          <div class="row2">
-            <div class="field"><label for="eDate">Date</label><input type="date" id="eDate" required></div>
-            <div class="field"><label for="eTime">Start time</label><input type="time" id="eTime" value="22:00" required></div>
-          </div>
-          <div class="row2" id="eSocFields">
-            <div class="field"><label for="eSocFrom">Battery before</label>
-              <div class="suffix"><input type="number" id="eSocFrom" min="0" max="100" step="1" inputmode="numeric" placeholder="20"><span>%</span></div></div>
-            <div class="field"><label for="eSocTo">Battery after</label>
-              <div class="suffix"><input type="number" id="eSocTo" min="0" max="100" step="1" inputmode="numeric" placeholder="80"><span>%</span></div></div>
-          </div>
-          <div class="field" id="eKwhField" hidden><label for="eKwh">Energy from the charger</label>
-            <div class="suffix"><input type="number" id="eKwh" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
-          <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. overnight charge"></div>
-          <div class="estimate" id="eEstimate"></div>
-          <button class="btn" type="submit" id="eSubmit">Save charging session</button>
-          </div>
-          <p class="status" id="eStatus" role="status"></p>
-        </form>
-      </section>
-
-      <section class="panel">
-        <details class="settings" id="settingsBox">
-          <summary><h2>Tariff and car settings</h2></summary>
-          <form id="formSettings" novalidate>
-            <div class="settings-grid">
-              <div class="field"><label for="sPreset">PLN household tariff (by your meter's VA rating)</label>
-                <select id="sPreset">
-                  <option value="605">900 VA subsidised (Rp 605)</option>
-                  <option value="1352">900 VA non-subsidised (Rp 1.352)</option>
-                  <option value="1444.7">1.300–2.200 VA (Rp 1.444,70)</option>
-                  <option value="1699.53">3.500–5.500 VA (Rp 1.699,53)</option>
-                  <option value="1699.53r3">6.600 VA and above (Rp 1.699,53)</option>
-                  <option value="custom">Custom</option>
-                </select></div>
-              <div class="field"><label for="sTariff">Rate per kWh</label>
-                <div class="suffix"><input type="number" id="sTariff" min="0" step="0.01"><span>Rp</span></div></div>
-              <div class="field"><label for="sPpj">PPJ (street lighting tax)</label>
-                <div class="suffix"><input type="number" id="sPpj" min="0" max="20" step="0.1"><span>%</span></div></div>
-              <div class="field"><label for="sBattery">Usable battery</label>
-                <div class="suffix"><input type="number" id="sBattery" min="1" step="0.1"><span>kWh</span></div></div>
-              <div class="field"><label for="sEff">Charging efficiency</label>
-                <div class="suffix"><input type="number" id="sEff" min="50" max="100" step="1"><span>%</span></div></div>
-            </div>
-            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. PPJ is added on top of the PLN rate. EV charging runs through the same token meter, so it costs the same per kWh as the rest of the house. The car defaults are for a Jaecoo J5 EV (60,9 kWh battery, about 58,9 kWh usable). Home AC charging loses roughly 10% as heat, so the meter sees more than the battery stores.</p>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
-              <button class="btn" type="submit" id="sSubmit">Save settings</button>
-              <p class="status" id="sStatus" role="status"></p>
-            </div>
-          </form>
-        </details>
-      </section>
-
-      <section class="panel" aria-labelledby="dataTitle">
-        <h2 id="dataTitle">Your data</h2>
-        <p class="hint">Entries are saved in this browser on this device only. Export a backup now and then, and import it to move your log to another phone or laptop.</p>
-        <div class="data-actions">
-          <button class="btn ghost" type="button" id="exportBtn">Export backup</button>
-          <label class="btn ghost filebtn">Import backup<input type="file" id="importFile" accept="application/json,.json"></label>
-        </div>
-        <p class="status" id="importStatus" role="status"></p>
-      </section>
-    </div>
-  </div>
-
-  <section class="panel" aria-labelledby="histTitle">
-    <div class="panel-head">
-      <h2 id="histTitle">Log for the month</h2>
+  <section class="card" aria-labelledby="histTitle">
+    <div class="card-head">
+      <h2 id="histTitle">Entries</h2>
       <p id="histNote"></p>
     </div>
     <div id="histWrap"></div>
   </section>
-</div>
+</main>
+
+<nav class="actionbar" aria-label="Log">
+  <div class="actionbar-in">
+    <button type="button" class="act act-primary" id="tabHome" aria-haspopup="dialog">Token &amp; meter</button>
+    <button type="button" class="act" id="tabEv" aria-haspopup="dialog">Charge car</button>
+  </div>
+</nav>
+
+<div id="backdrop" hidden></div>
+
+<section class="sheet" id="sheetHome" role="dialog" aria-modal="true" aria-labelledby="sheetHomeTitle" hidden>
+  <div class="sheet-head"><h2 id="sheetHomeTitle">Token &amp; meter</h2><button type="button" class="sheet-close">Close</button></div>
+  <form id="formHome" novalidate>
+    <div class="choice" role="radiogroup" aria-label="Entry type">
+      <label><input type="radio" name="hMode" id="hModeTopup" value="topup" checked> Token top-up</label>
+      <label><input type="radio" name="hMode" id="hModeBalance" value="balance"> Meter reading</label>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="hDate">Date</label><input type="date" id="hDate" required></div>
+      <div class="field"><label for="hTime">Time</label><input type="time" id="hTime" required></div>
+    </div>
+    <div class="field"><label for="hValue" id="hValueLbl">kWh left before topping up</label>
+      <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
+    <div class="row2" id="hTokenRow">
+      <div class="field" id="hTokenField"><label for="hToken">Token kWh</label>
+        <div class="suffix"><input type="number" id="hToken" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
+      <div class="field" id="hPaidField"><label for="hPaid">Paid (optional)</label>
+        <div class="suffix"><input type="number" id="hPaid" min="0" step="1" inputmode="numeric" placeholder="0"><span>Rp</span></div></div>
+    </div>
+    <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120"></div>
+    <div class="estimate" id="hEstimate"></div>
+    <button class="btn" type="submit" id="hSubmit">Save top-up</button>
+    <p class="status" id="hStatus" role="status"></p>
+  </form>
+</section>
+
+<section class="sheet" id="sheetEv" role="dialog" aria-modal="true" aria-labelledby="sheetEvTitle" hidden>
+  <div class="sheet-head"><h2 id="sheetEvTitle">Charge car</h2><button type="button" class="sheet-close">Close</button></div>
+  <form id="formEv" novalidate>
+    <div class="active-charge" id="eActive" hidden>
+      <strong>Charging now</strong>
+      <span id="eActiveInfo"></span>
+      <div class="field"><label for="eFinishTo">Battery when you unplug</label>
+        <div class="suffix"><input type="number" id="eFinishTo" min="0" max="100" step="1" inputmode="numeric" placeholder="80"><span>%</span></div></div>
+      <div class="estimate" id="eActiveEst"></div>
+      <div class="btns">
+        <button class="btn" type="button" id="eFinish">Finish charging</button>
+        <button class="btn ghost" type="button" id="eDiscard">Discard</button>
+      </div>
+    </div>
+    <div id="eFormBody">
+      <div class="choice" role="radiogroup" aria-label="How to log it">
+        <label><input type="radio" name="eMode" id="eModeSoc" value="soc" checked> Battery %</label>
+        <label><input type="radio" name="eMode" id="eModeKwh" value="kwh"> Charger kWh</label>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="eDate">Date</label><input type="date" id="eDate" required></div>
+        <div class="field"><label for="eTime">Start time</label><input type="time" id="eTime" required></div>
+      </div>
+      <div class="row2" id="eSocFields">
+        <div class="field"><label for="eSocFrom">Battery before</label>
+          <div class="suffix"><input type="number" id="eSocFrom" min="0" max="100" step="1" inputmode="numeric" placeholder="20"><span>%</span></div></div>
+        <div class="field"><label for="eSocTo">Battery after</label>
+          <div class="suffix"><input type="number" id="eSocTo" min="0" max="100" step="1" inputmode="numeric" placeholder="later"><span>%</span></div></div>
+      </div>
+      <div class="field" id="eKwhField" hidden><label for="eKwh">Energy from the charger</label>
+        <div class="suffix"><input type="number" id="eKwh" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
+      <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120"></div>
+      <div class="estimate" id="eEstimate"></div>
+      <button class="btn" type="submit" id="eSubmit">Save charging session</button>
+    </div>
+    <p class="status" id="eStatus" role="status"></p>
+  </form>
+</section>
+
+<section class="sheet" id="sheetSettings" role="dialog" aria-modal="true" aria-labelledby="sheetSettingsTitle" hidden>
+  <div class="sheet-head"><h2 id="sheetSettingsTitle">Settings</h2><button type="button" class="sheet-close">Close</button></div>
+  <form id="formSettings" novalidate>
+    <div class="field"><label for="sPreset">PLN tariff (by your meter's VA)</label>
+      <select id="sPreset">
+        <option value="605">900 VA subsidised (Rp 605)</option>
+        <option value="1352">900 VA non-subsidised (Rp 1.352)</option>
+        <option value="1444.7">1.300–2.200 VA (Rp 1.444,70)</option>
+        <option value="1699.53">3.500–5.500 VA (Rp 1.699,53)</option>
+        <option value="1699.53r3">6.600 VA and above (Rp 1.699,53)</option>
+        <option value="custom">Custom</option>
+      </select></div>
+    <div class="row2">
+      <div class="field"><label for="sTariff">Rate per kWh</label>
+        <div class="suffix"><input type="number" id="sTariff" min="0" step="0.01"><span>Rp</span></div></div>
+      <div class="field"><label for="sPpj">PPJ tax</label>
+        <div class="suffix"><input type="number" id="sPpj" min="0" max="20" step="0.1"><span>%</span></div></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="sBattery">Usable battery</label>
+        <div class="suffix"><input type="number" id="sBattery" min="1" step="0.1"><span>kWh</span></div></div>
+      <div class="field"><label for="sEff">Charging efficiency</label>
+        <div class="suffix"><input type="number" id="sEff" min="50" max="100" step="1"><span>%</span></div></div>
+    </div>
+    <p class="small">EV charging uses the same token meter, so it costs the same per kWh as the house. Car defaults are for a Jaecoo J5 EV: 58,9 kWh usable, about 10% lost as heat while charging.</p>
+    <button class="btn" type="submit" id="sSubmit">Save settings</button>
+    <p class="status" id="sStatus" role="status"></p>
+  </form>
+  <h3>Your data</h3>
+  <p class="small">Saved in this browser on this device only. Your phone and iPad each keep their own copy. To copy everything (entries and settings) to another device, export a backup here and import it there.</p>
+  <div class="btns" style="margin-top:12px">
+    <button class="btn ghost" type="button" id="exportBtn">Export backup</button>
+    <label class="btn ghost filebtn">Import backup<input type="file" id="importFile" accept="application/json,.json"></label>
+  </div>
+  <p class="status" id="importStatus" role="status" style="margin-top:8px"></p>
+</section>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (() => {
@@ -461,45 +426,23 @@ details.settings[open] > summary::after { content: "–"; }
     $("monthLabel").textContent = ymLabel(S.month, true);
     $("nextMonth").disabled = S.month >= ymOf(new Date());
     $("kTotal").textContent = rp(A.totalRp);
-    $("kTotalSub").textContent = kwh(A.totalKwh) + " in total";
+    $("kTotalSub").textContent = kwh(A.totalKwh) + " used";
     $("kHouse").textContent = rp(A.houseRp);
     $("kHouseSub").textContent = kwh(A.houseKwh);
     $("kEvHome").textContent = rp(A.evHomeRp);
     $("kEvHomeSub").textContent = kwh(A.evHomeKwh) + (A.cs.length ? `, ${A.cs.length} session${A.cs.length > 1 ? "s" : ""}` : "");
 
-    const rows = [
-      { k: "s1", name: "Household (non-EV)", kwh: A.houseKwh, rp: A.houseRp },
-      { k: "s2", name: "EV charging at home", kwh: A.evHomeKwh, rp: A.evHomeRp },
-    ];
     const tot = A.totalRp || 0;
-    const split = $("split");
-    split.replaceChildren(...rows.map((r) => {
-      const d = document.createElement("div"); d.className = r.k;
-      d.style.flexGrow = tot ? String(r.rp / tot) : "0"; d.style.flexBasis = "0";
-      d.title = r.name + ": " + rp(r.rp);
+    $("split").replaceChildren(...[["s1", A.houseRp], ["s2", A.evHomeRp]].map(([k, v]) => {
+      const d = document.createElement("div"); d.className = k;
+      d.style.flexGrow = tot ? String(v / tot) : "0"; d.style.flexBasis = "0";
       return d;
     }));
-    const tb = $("bdBody"); tb.replaceChildren();
-    for (const r of rows) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td><span class="key"><i class="sw ${r.k}"></i></span></td><td class="r"></td><td class="r"></td><td class="r"></td><td class="r"></td>`;
-      tr.children[0].firstChild.append(r.name);
-      tr.children[1].textContent = numFmt1.format(r.kwh);
-      tr.children[2].textContent = r.kwh ? numFmt0.format(r.rp / r.kwh) : "—";
-      tr.children[3].textContent = rp(r.rp);
-      tr.children[4].textContent = tot ? numFmt0.format(r.rp / tot * 100) + "%" : "—";
-      tb.append(tr);
-    }
-    $("bdFoot").innerHTML = `<tr><td>Total</td><td class="r">${numFmt1.format(A.totalKwh)}</td><td class="r">${A.totalKwh ? numFmt0.format(A.totalRp / A.totalKwh) : "—"}</td><td class="r">${rp(A.totalRp)}</td><td class="r">${tot ? "100%" : "—"}</td></tr>`;
-
-    const st = S.settings;
-    let hint = `Each meter entry subtracts the home charging since the entry before it: meter ${kwh(A.meter)} − charging in those intervals ${kwh(A.evInIntervals)} = household ${kwh(A.houseKwh)}.`;
-    if (A.pendingKwh) hint += S.hasMeter ? ` ${kwh(A.pendingKwh)} of charging since your last reading will be subtracted when you log the next one.` : ` Log a meter entry to split household use from the ${kwh(A.pendingKwh)} of charging.`;
-    hint += ` PLN rate Rp ${numFmt2.format(st.tariff)}/kWh` +
-      (st.ppj ? `, PPJ ${numFmt2.format(st.ppj)}%` : "") + ", the same for EV charging.";
-    if (A.tops.length) hint += ` Token top-ups this month: ${A.tops.length}, adding ${kwh(A.topKwh)}` + (A.topPaid ? ` for ${rp(A.topPaid)} paid.` : ".");
-    if (A.evOverMeter) hint = "In at least one entry this month, home charging was higher than the meter usage, so household counts as 0 there. Check for a missing or mistyped reading. " + hint;
-    $("bdHint").textContent = hint;
+    let hint = A.meter || A.evInIntervals ? `Household = meter ${kwh(A.meter)} − EV charging in the same period ${kwh(A.evInIntervals)}.` : "";
+    if (A.pendingKwh) hint += S.hasMeter ? ` ${kwh(A.pendingKwh)} of charging since your last reading will be subtracted when you log the next one.` : ` Log a meter reading or top-up to split household use from the ${kwh(A.pendingKwh)} of charging.`;
+    if (A.tops.length) hint += ` ${A.tops.length} token top-up${A.tops.length > 1 ? "s" : ""} this month, ${kwh(A.topKwh)}` + (A.topPaid ? ` for ${rp(A.topPaid)}.` : ".");
+    if (A.evOverMeter) hint = "EV charging was higher than the meter usage in one entry, so household counts as 0 there. Check for a missing or mistyped reading. " + hint;
+    $("bdHint").textContent = hint.trim(); $("bdHint").hidden = !hint;
   }
 
   /* ---------- charts (hand-drawn SVG stacked bars) ---------- */
@@ -599,35 +542,14 @@ details.settings[open] > summary::after { content: "–"; }
       cats: months, selected: 5,
       series: [
         { name: "Household", cls: "f1", sw: "s1", values: aggs.map((a) => rpMode ? a.houseRp : a.houseKwh) },
-        { name: "EV at home", cls: "f2", sw: "s2", values: aggs.map((a) => rpMode ? a.evHomeRp : a.evHomeKwh) },
+        { name: "EV charging", cls: "f2", sw: "s2", values: aggs.map((a) => rpMode ? a.evHomeRp : a.evHomeKwh) },
       ],
       fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
       fmtTip: (v) => rpMode ? rp(v) : kwh(v),
       tipTitle: (i) => ymLabel(months[i], true),
       showTick: () => true, tickLabel: (i) => MONTHS[Number(months[i].slice(5)) - 1],
-      emptyText: "No usage logged in these months yet", maxBar: 44,
+      emptyText: "Nothing logged in these months yet", maxBar: 36, height: 200,
     });
-    const nd = daysIn(S.month);
-    const home = new Array(nd).fill(0);
-    for (const c of S.charges) {
-      if (!c.date.startsWith(S.month)) continue;
-      const d = Number(c.date.slice(8)) - 1, v = rpMode ? chargeCost(c).rp : c.kwh;
-      home[d] += v;
-    }
-    drawStacked($("dailyChart"), {
-      aria: "EV charging per day in " + ymLabel(S.month, true), height: 190,
-      cats: Array.from({ length: nd }, (_, i) => i + 1),
-      series: [
-        { name: "At home", cls: "f2", sw: "s2", values: home },
-      ],
-      fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
-      fmtTip: (v) => rpMode ? rp(v) : kwh(v),
-      tipTitle: (i) => (i + 1) + " " + ymLabel(S.month, true),
-      showTick: (i) => i === 0 || (i + 1) % 5 === 0, tickLabel: (i) => String(i + 1),
-      emptyText: "No charging sessions this month", maxBar: 16,
-    });
-    const cs = S.charges.filter((c) => c.date.startsWith(S.month));
-    $("dailyNote").textContent = cs.length ? `${cs.length} session${cs.length > 1 ? "s" : ""}, ${kwh(cs.reduce((a, c) => a + c.kwh, 0))}` : "No sessions yet";
   }
 
   /* ---------- history ---------- */
@@ -637,72 +559,56 @@ details.settings[open] > summary::after { content: "–"; }
       ...A.cs.map((c) => ({ kind: "charge", d: c })),
     ].sort((a, b) => (b.d.date + (b.d.time || "")).localeCompare(a.d.date + (a.d.time || "")));
     const wrap = $("histWrap");
-    $("histNote").textContent = items.length ? `${items.length} entr${items.length > 1 ? "ies" : "y"}` : "";
+    $("histNote").textContent = items.length ? `${items.length} in ${ymLabel(S.month, false)}` : "";
     if (!items.length) {
       const anyData = S.usage.length || S.charges.length;
       wrap.innerHTML = `<div class="emptybox"><strong>${anyData ? "Nothing logged in " + ymLabel(S.month, true) : "Your log is empty"}</strong>
-        <span>Add a home meter entry or an EV charging session from the panel above. Entries appear here with their Rupiah cost.</span></div>`;
+        <span>Use the buttons below to log a token top-up, a meter reading or a charging session.</span></div>`;
       return;
     }
-    const tw = document.createElement("div"); tw.className = "tablewrap";
-    const t = document.createElement("table");
-    t.innerHTML = `<thead><tr><th>Date</th><th>Type</th><th>Details</th><th class="r">kWh</th><th class="r">Rp</th><th></th></tr></thead><tbody></tbody>`;
-    const tb = t.tBodies[0];
+    const tariff = S.settings.tariff * (1 + S.settings.ppj / 100);
+    const ul = document.createElement("ul"); ul.className = "entries";
     for (const it of items) {
-      const d = it.d, tr = document.createElement("tr");
-      tr.innerHTML = `<td class="mono"></td><td></td><td></td><td class="r"></td><td class="r"></td><td class="r"></td>`;
-      tr.children[0].textContent = fmtDate(d.date) + (d.time ? " " + d.time : "");
-      const chip = document.createElement("span"); chip.className = "chip";
-      let detail = d.note || "";
-      let kwhText = numFmt1.format(d.kwh || 0);
-      const withNote = (main) => main + (d.note ? " (" + d.note + ")" : "");
-      if (it.kind === "usage" && d.kind === "topup" && d.balance != null) {
-        chip.innerHTML = `<i class="sw" style="background:var(--accent)"></i>Token top-up`;
-        tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
-        detail = withNote(`Remaining ${numFmt2.format(d.balance)} kWh, +${numFmt1.format(d.tokenKwh)} kWh token` + (d.paidRp ? `, paid ${rp(d.paidRp)}` : "")
-          + (d.baseline ? ", starting point" : "") + (d.mismatch ? ", higher than expected: log the missing top-up" : ""));
-      } else if (it.kind === "usage" && d.kind === "topup") {
-        chip.innerHTML = `<i class="sw" style="background:var(--accent)"></i>Token top-up`;
-        kwhText = "+" + numFmt1.format(d.tokenKwh);
-        tr.children[4].textContent = d.paidRp ? rp(d.paidRp) : "—";
-        detail = withNote(d.paidRp ? `Paid ${rp(d.paidRp)}, Rp ${numFmt0.format(d.paidRp / d.tokenKwh)}/kWh` : "Token added");
+      const d = it.d, li = document.createElement("li"); li.className = "entry";
+      li.innerHTML = `<i class="sw"></i><div class="entry-main"><b></b><span class="entry-sub"></span></div><div class="entry-num"><b></b><span></span></div><span></span>`;
+      const [dot, main, num] = li.children;
+      const when = fmtDate(d.date) + (d.time ? " " + d.time : "");
+      const withNote = (x) => x + (d.note ? " (" + d.note + ")" : "");
+      let title, detail, kwhText = kwh(d.kwh || 0), rpText = rp((d.kwh || 0) * tariff);
+      if (it.kind === "usage" && d.kind === "topup") {
+        title = "Token top-up"; dot.style.background = "var(--accent)";
+        if (d.balance != null) detail = withNote(`Remaining ${numFmt2.format(d.balance)} kWh, +${numFmt1.format(d.tokenKwh)} kWh` + (d.baseline ? ", start" : "") + (d.mismatch ? ", check: a top-up may be missing" : ""));
+        else { detail = withNote(d.paidRp ? `Paid ${rp(d.paidRp)}` : "Token added"); kwhText = "+" + kwh(d.tokenKwh); rpText = d.paidRp ? rp(d.paidRp) : "—"; }
       } else if (it.kind === "usage" && d.kind === "balance") {
-        chip.innerHTML = `<i class="sw" style="background:var(--muted)"></i>Token meter`;
-        tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
-        detail = withNote("Remaining " + numFmt2.format(d.balance) + " kWh" + (d.baseline ? ", starting balance" : "") + (d.mismatch ? ", higher than expected: log the missing top-up" : ""));
+        title = "Meter reading"; dot.style.background = "var(--muted)";
+        detail = withNote("Remaining " + numFmt2.format(d.balance) + " kWh" + (d.baseline ? ", start" : "") + (d.mismatch ? ", check: a top-up may be missing" : ""));
       } else if (it.kind === "usage") {
-        chip.innerHTML = `<i class="sw" style="background:var(--muted)"></i>Meter`;
-        tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
-        if (d.reading != null) detail = "Reading " + numFmt2.format(d.reading) + (detail ? " (" + detail + ")" : "");
+        title = "Meter"; dot.style.background = "var(--muted)";
+        detail = withNote(d.reading != null ? "Reading " + numFmt2.format(d.reading) : "kWh used");
       } else {
-        const cc = chargeCost(d);
-        chip.innerHTML = `<i class="sw s2"></i>EV home`;
-        tr.children[4].textContent = rp(cc.rp);
-        const bits = [];
-        if (d.socFrom != null) bits.push(`${numFmt0.format(d.socFrom)}% → ${numFmt0.format(d.socTo)}%, ${numFmt1.format(d.batteryKwh)} kWh into battery`);
-        if (d.socFrom == null) bits.push("kWh from charger");
-        detail = bits.join(", ") + (d.note ? " (" + d.note + ")" : "");
+        title = "EV charge"; dot.classList.add("s2");
+        detail = withNote(d.socFrom != null ? `${numFmt0.format(d.socFrom)}% → ${numFmt0.format(d.socTo)}%` : "kWh from charger");
+        rpText = rp(chargeCost(d).rp);
       }
-      if (it.kind === "usage" && isConsumption(d) && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
-      tr.children[1].append(chip);
-      tr.children[2].textContent = detail;
-      if (d.example) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Example"; tr.children[2].append(tg); }
-      tr.children[3].textContent = kwhText;
+      main.children[0].textContent = title;
+      main.children[1].textContent = when + ", " + detail;
+      if (d.example) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Example"; main.children[1].append(tg); }
+      num.children[0].textContent = rpText; num.children[1].textContent = kwhText;
       if (S.canWrite) {
-        const b = document.createElement("button"); b.type = "button"; b.className = "del"; b.textContent = "Delete";
+        const b = document.createElement("button"); b.type = "button"; b.className = "del"; b.textContent = "×"; b.setAttribute("aria-label", "Delete " + title + " " + when);
         b.addEventListener("click", () => {
           if (!b.classList.contains("armed")) {
-            b.classList.add("armed"); b.textContent = "Confirm delete";
-            setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "Delete"; } }, 4000);
+            b.classList.add("armed"); b.textContent = "Delete?";
+            setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "×"; } }, 4000);
             return;
           }
           removeEntry(it.kind, d.id);
         });
-        tr.children[5].append(b);
+        li.lastChild.replaceWith(b);
       }
-      tb.append(tr);
+      ul.append(li);
     }
-    tw.append(t); wrap.replaceChildren(tw);
+    wrap.replaceChildren(ul);
   }
 
   function renderNotice(exampleCount) {
@@ -710,15 +616,15 @@ details.settings[open] > summary::after { content: "–"; }
     const msgs = [];
     if (S.offlineMsg) msgs.push(S.offlineMsg);
     const firstRun = !S.usage.length && !S.charges.length && !S.active;
-    if (S.active) msgs.push(`Your car has been charging since ${S.active.time} (${fmtDate(S.active.date)}, from ${numFmt0.format(S.active.socFrom)}%). Add the battery % when you unplug.`);
-    if (firstRun) msgs.push("Welcome! Log your meter or a charging session to get started, or look around with example data first.");
-    if (exampleCount) msgs.push(`You're looking at ${exampleCount} example entries so you can see how the app works. Clear them when you start logging your own.`);
+    if (S.active) msgs.push(`Your car has been charging since ${S.active.time} (${fmtDate(S.active.date)}, from ${numFmt0.format(S.active.socFrom)}%).`);
+    if (firstRun) msgs.push("Welcome! Log a token top-up or meter reading to get started, or look around with example data first.");
+    if (exampleCount) msgs.push(`Showing ${exampleCount} example entries. Clear them before you log your own.`);
     if (!msgs.length) { n.hidden = true; return; }
     n.innerHTML = '<span></span><div class="notice-actions"></div>'; n.firstChild.textContent = msgs.join(" ");
     const actions = n.lastChild;
     if (S.active) {
       const b = document.createElement("button"); b.type = "button"; b.textContent = "Finish charging";
-      b.addEventListener("click", () => { selectTab("ev"); $("eFinishTo").focus(); }); actions.append(b);
+      b.addEventListener("click", () => openSheet("sheetEv")); actions.append(b);
     }
     if (firstRun) {
       const b = document.createElement("button"); b.type = "button"; b.id = "loadExamples"; b.textContent = "Try it with example data";
@@ -906,7 +812,7 @@ details.settings[open] > summary::after { content: "–"; }
       msg = h.baseline ? "Starting reading saved." : "Saved " + kwh(doc.kwh) + " used.";
     }
     $("hSubmit").disabled = true;
-    try { await save("usage", doc); setStatus("hStatus", msg, "ok"); $("hValue").value = ""; $("hToken").value = ""; $("hPaid").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
+    try { await save("usage", doc); setStatus("hStatus", ""); closeSheets(); toast(msg); $("hValue").value = ""; $("hToken").value = ""; $("hPaid").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("hStatus", e.message, "err"); }
     finally { $("hSubmit").disabled = !S.canWrite; }
   });
@@ -926,7 +832,7 @@ details.settings[open] > summary::after { content: "–"; }
     const doc = { date, time: $("eTime").value || "00:00", kwh: Math.round(e.kwh * 100) / 100, place, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
     if (e.battery != null) Object.assign(doc, { socFrom: e.from, socTo: e.to, batteryKwh: Math.round(e.battery * 100) / 100 });
     $("eSubmit").disabled = true;
-    try { await save("charges", doc); setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok"); $("eKwh").value = ""; $("eSocFrom").value = ""; $("eSocTo").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
+    try { await save("charges", doc); setStatus("eStatus", ""); closeSheets(); toast("Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + "."); $("eKwh").value = ""; $("eSocFrom").value = ""; $("eSocTo").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("eStatus", e.message, "err"); }
     finally { $("eSubmit").disabled = !S.canWrite; }
   });
@@ -941,7 +847,11 @@ details.settings[open] > summary::after { content: "–"; }
   function renderActive() {
     const a = S.active;
     $("eActive").hidden = !a; $("eFormBody").hidden = !!a;
+    const btn = $("tabEv");
+    btn.classList.toggle("charging", !!a);
+    btn.innerHTML = a ? "Finish charging<small></small>" : "Charge car";
     if (!a) return;
+    btn.lastChild.textContent = `since ${a.time}, from ${numFmt0.format(a.socFrom)}%`;
     $("eActiveInfo").textContent = `Started ${fmtDate(a.date)} at ${a.time} with the battery at ${numFmt0.format(a.socFrom)}%.` + (a.note ? ` (${a.note})` : "");
     const r = activeComputed(), est = $("eActiveEst");
     est.innerHTML = "<span></span><strong></strong><span></span>";
@@ -962,7 +872,7 @@ details.settings[open] > summary::after { content: "–"; }
     S.active = null; $("eFinishTo").value = "";
     await save("charges", doc);
     S.month = a.date.slice(0, 7); render();
-    setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok");
+    setStatus("eStatus", ""); closeSheets(); toast("Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".");
   }
   $("eFinish").addEventListener("click", finishCharge);
   $("eFinishTo").addEventListener("input", renderActive);
@@ -975,7 +885,7 @@ details.settings[open] > summary::after { content: "–"; }
     }
     b.classList.remove("armed"); b.textContent = "Discard";
     S.active = null; $("eFinishTo").value = ""; persist(); render();
-    setStatus("eStatus", "Charging session discarded.", "ok");
+    setStatus("eStatus", ""); closeSheets(); toast("Charging session discarded.");
   });
 
   function removeEntry(kind, id) {
@@ -1014,7 +924,7 @@ details.settings[open] > summary::after { content: "–"; }
     const tokens = [{ paid: 500000, kwh: 334.8 }, { paid: 200000, kwh: 133.4 }];
     let bal = 120;
     const r1 = (x) => Math.round(x * 10) / 10;
-    usage.push({ date: iso(start), time: "07:00", kind: "balance", balance: bal, kwh: 0, note: "Starting reading" });
+    usage.push({ date: iso(start), time: "07:00", kind: "balance", balance: bal, kwh: 0, note: "" });
     for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       if (bal < 90 && iso(d) !== iso(start)) {
         const t = pick(tokens);
@@ -1022,7 +932,7 @@ details.settings[open] > summary::after { content: "–"; }
         bal = r1(bal) + t.kwh;
       }
       bal -= uni(8.2, 11.4);
-      if (d.getDay() === 0) { bal = r1(bal); usage.push({ date: iso(d), time: "20:00", kind: "balance", balance: bal, kwh: 0, note: "Weekly reading" }); }
+      if (d.getDay() === 0) { bal = r1(bal); usage.push({ date: iso(d), time: "20:00", kind: "balance", balance: bal, kwh: 0, note: "" }); }
       for (const c of charges) if (c.date === iso(d)) bal -= c.kwh;
     }
     const tag = (x) => ({ ...x, id: newId(), example: true, createdAt: x.date + "T" + x.time + ":00.000Z" });
@@ -1070,14 +980,34 @@ details.settings[open] > summary::after { content: "–"; }
     } finally { $("importFile").value = ""; }
   });
 
-  // tabs
-  function selectTab(which) {
-    const home = which === "home";
-    $("tabHome").setAttribute("aria-selected", String(home)); $("tabEv").setAttribute("aria-selected", String(!home));
-    $("formHome").hidden = !home; $("formEv").hidden = home;
+  /* ---------- sheets + toast ---------- */
+  let lastOpener = null;
+  function openSheet(id) {
+    closeSheets(true);
+    lastOpener = document.activeElement;
+    if (id === "sheetHome" || id === "sheetEv") { const n = new Date(), t = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+      if (id === "sheetHome" && !$("hValue").value) { $("hDate").value = todayStr(); $("hTime").value = t; }
+      if (id === "sheetEv" && !$("eSocFrom").value && !$("eKwh").value) { $("eDate").value = todayStr(); $("eTime").value = t; } }
+    $("backdrop").hidden = false; $(id).hidden = false; document.body.classList.add("locked");
+    $(id).querySelector(".sheet-close").focus({ preventScroll: true });
+    updateEstimates(); renderActive();
   }
-  $("tabHome").addEventListener("click", () => selectTab("home"));
-  $("tabEv").addEventListener("click", () => selectTab("ev"));
+  function closeSheets(quiet) {
+    document.querySelectorAll(".sheet").forEach((x) => { x.hidden = true; });
+    $("backdrop").hidden = true; document.body.classList.remove("locked");
+    if (!quiet && lastOpener && lastOpener.focus) lastOpener.focus({ preventScroll: true });
+  }
+  let toastTimer = 0;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+  $("tabHome").addEventListener("click", () => openSheet("sheetHome"));
+  $("tabEv").addEventListener("click", () => openSheet("sheetEv"));
+  $("settingsBtn").addEventListener("click", () => openSheet("sheetSettings"));
+  $("backdrop").addEventListener("click", () => closeSheets());
+  document.querySelectorAll(".sheet-close").forEach((b) => b.addEventListener("click", () => closeSheets()));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("backdrop").hidden) closeSheets(); });
   ["hValue", "hDate", "hTime", "hToken"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   ["eKwh", "eTime", "eSocFrom", "eSocTo"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   document.querySelectorAll('input[name="eMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.evMode = r.value; persist(); updateEstimates(); }));
@@ -1116,7 +1046,7 @@ details.settings[open] > summary::after { content: "–"; }
       batteryKwh: num("sBattery", DEFAULTS.batteryKwh) || DEFAULTS.batteryKwh, chargeEff: Math.min(100, Math.max(50, num("sEff", DEFAULTS.chargeEff))) };
     $("sSubmit").disabled = true;
     try {
-      S.settings = next; persist(); render(); setStatus("sStatus", "Settings saved.", "ok");
+      S.settings = next; persist(); render(); setStatus("sStatus", ""); closeSheets(); toast("Settings saved.");
     } catch { setStatus("sStatus", "Couldn't save settings. Try again.", "err"); }
     finally { $("sSubmit").disabled = !S.canWrite; }
   });
