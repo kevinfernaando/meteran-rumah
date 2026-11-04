@@ -2,8 +2,7 @@
 
 Track your home electricity and EV charging in kWh and Rupiah.
 
-- Log home usage as kWh used or as meter readings (the app works out the difference).
-- Prepaid token meters (prabayar): log the remaining kWh (sisa) and each token top-up; usage is worked out as last remaining + top-ups − current remaining, and recalculated if you delete an entry.
+- Built for prepaid token meters (prabayar). Log a **meter reading** (kWh left) whenever you check it, and each **token top-up** with the kWh left just before it plus the token kWh. Usage is measured from each entry to the next and recalculated if you delete one.
 - Start a charging session with just the battery % when you plug in, and finish it with the battery % when you unplug.
 - Log EV charging at home by battery % before and after (converted with your car's usable battery and charging losses; defaults are for a Jaecoo J5 EV, 58,9 kWh usable, 90% efficiency) or by the kWh your charger shows.
 - See each month split into household and EV charging at home, with costs at your PLN tariff, PPJ and the home-charging night discount.

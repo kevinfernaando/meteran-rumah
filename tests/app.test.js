@@ -39,9 +39,9 @@ async function logEv(page, { date, time, kwh }) {
   await page.fill('#eDate', date); await page.fill('#eTime', time); await page.fill('#eKwh', String(kwh));
   await page.click('#eSubmit');
 }
-async function logMeter(page, { date, kwh, time = '23:59', mode = 'kwh' }) {
+async function logMeter(page, { date, kwh, time = '23:59' }) {   // kwh = kWh left on the token meter
   await page.click('#tabHome');
-  await page.check(mode === 'kwh' ? '#hModeKwh' : mode === 'meter' ? '#hModeMeter' : '#hModeBalance');
+  await page.check('#hModeBalance');
   await page.fill('#hDate', date); await page.fill('#hTime', time); await page.fill('#hValue', String(kwh));
   await page.click('#hSubmit');
 }
@@ -69,8 +69,9 @@ test('entries are saved in the browser and survive a reload', async () => {
 test('household usage is the meter total minus home EV charging', async () => {
   const { ctx, page } = await freshPage();
   const today = await page.evaluate(() => new Date().toISOString().slice(0, 10));
-  await logMeter(page, { date: today, kwh: 100 });
+  await logMeter(page, { date: today, time: '08:00', kwh: 200 });   // starting reading
   await logEv(page, { date: today, time: '14:00', kwh: 30 });
+  await logMeter(page, { date: today, time: '23:59', kwh: 100 });   // 100 kWh used, 30 of it the car
   assert.match(await text(page, '#kHouseSub'), /^70,0 kWh/);
   assert.equal(await text(page, '#kHouse'), 'Rp 101.129'); // 70 × 1.444,70
   await ctx.close();
@@ -117,10 +118,13 @@ test('the page fits a phone screen without sideways scrolling', async () => {
 });
 
 /* ---------- prepaid token meter ---------- */
-async function logToken(page, mode, { date, value, paid }) {
+async function logToken(page, mode, { date, value, before, token, paid, time }) {
   await page.click('#tabHome');
   await page.check(mode === 'balance' ? '#hModeBalance' : '#hModeTopup');
-  await page.fill('#hDate', date); await page.fill('#hValue', String(value));
+  await page.fill('#hDate', date);
+  if (time) await page.fill('#hTime', time);
+  if (mode === 'balance') await page.fill('#hValue', String(value));
+  else { if (before != null) await page.fill('#hValue', String(before)); await page.fill('#hToken', String(token)); }
   if (paid != null) await page.fill('#hPaid', String(paid));
   await page.click('#hSubmit');
 }
@@ -129,13 +133,13 @@ const todayIn = (page) => page.evaluate(() => { const d = new Date(); return `${
 test('token meter: usage is last remaining plus top-ups minus current remaining', async () => {
   const { ctx, page, errors } = await freshPage();
   const d = await todayIn(page);
-  await logToken(page, 'balance', { date: d, value: 50 });          // first reading = baseline
-  await logToken(page, 'topup', { date: d, value: 100, paid: 150000 });
-  await logToken(page, 'balance', { date: d, value: 120 });         // 50 + 100 − 120 = 30
-  assert.match(await text(page, '#kTotalSub'), /^30,0 kWh/);
+  await logToken(page, 'balance', { date: d, value: 50 });                                // first reading = baseline
+  await logToken(page, 'topup', { date: d, before: 30, token: 100, paid: 150000 });       // 50 − 30 = 20 used, meter now 130
+  await logToken(page, 'balance', { date: d, value: 110 });                               // 130 − 110 = 20 used
+  assert.match(await text(page, '#kTotalSub'), /^40,0 kWh/);
   const log = await text(page, '#histWrap');
   assert.match(log, /Token top-up/);
-  assert.match(log, /Remaining 120 kWh/);
+  assert.match(log, /Remaining 110 kWh/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -222,9 +226,9 @@ const monthDates = (page) => page.evaluate(() => {
 test('charging between two readings is subtracted from the later reading, even across months', async () => {
   const { ctx, page, errors } = await freshPage();
   const m = await monthDates(page);
-  await logMeter(page, { date: m.prevFirst, time: '08:00', kwh: 1000, mode: 'meter' });   // baseline
+  await logMeter(page, { date: m.prevFirst, time: '08:00', kwh: 300 });   // baseline
   await logEv(page, { date: m.prevLast, time: '22:30', kwh: 20 });
-  await logMeter(page, { date: m.curFirst, time: '09:00', kwh: 1100, mode: 'meter' });    // 100 kWh used
+  await logMeter(page, { date: m.curFirst, time: '09:00', kwh: 200 });    // 100 kWh used
   assert.match(await text(page, '#kHouseSub'), /^80,0 kWh/);                              // 100 − 20 charged on the last day of last month
   await page.click('#prevMonth');
   assert.match(await text(page, '#kEvHomeSub'), /^20,0 kWh/);                            // the charge still costs last month
@@ -236,12 +240,12 @@ test('charging between two readings is subtracted from the later reading, even a
 test('the time of day decides which reading a same-day charge belongs to', async () => {
   const { ctx, page } = await freshPage();
   const d = await todayIn(page);
-  await logMeter(page, { date: d, time: '08:00', kwh: 50, mode: 'balance' });            // starting balance
+  await logMeter(page, { date: d, time: '08:00', kwh: 50 });            // starting balance
   await logEv(page, { date: d, time: '22:30', kwh: 10 });
-  await logMeter(page, { date: d, time: '21:00', kwh: 25, mode: 'balance' });            // 25 used, charge is later
+  await logMeter(page, { date: d, time: '21:00', kwh: 25 });            // 25 used, charge is later
   assert.match(await text(page, '#kHouseSub'), /^25,0 kWh/);
   assert.match(await text(page, '#bdHint'), /10,0 kWh of charging since your last reading/);
-  await logMeter(page, { date: d, time: '23:30', kwh: 10, mode: 'balance' });            // 15 used, 10 of it the car
+  await logMeter(page, { date: d, time: '23:30', kwh: 10 });            // 15 used, 10 of it the car
   assert.match(await text(page, '#kHouseSub'), /^30,0 kWh/);                              // 25 + (15 − 10)
   assert.doesNotMatch(await text(page, '#bdHint'), /since your last reading/);
   await ctx.close();
@@ -342,5 +346,56 @@ test('an open charging session can be discarded', async () => {
   await page.reload();
   assert.doesNotMatch(await text(page, '#notice'), /charging since/i);
   assert.match(await text(page, '#histWrap'), /Your log is empty/);
+  await ctx.close();
+});
+
+/* ---------- home meter = meter readings + token top-ups ---------- */
+test('the home meter only offers meter readings and token top-ups', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#tabHome');
+  assert.equal(await page.locator('input[name="hMode"]').count(), 2);
+  assert.equal(await page.locator('#hModeKwh, #hModeMeter').count(), 0);
+  assert.match(await text(page, '#formHome'), /Meter reading/);
+  assert.match(await text(page, '#formHome'), /Token top-up/);
+  await ctx.close();
+});
+
+test('a top-up needs the kWh left before topping up', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'topup', { date: d, token: 100 });
+  assert.match(await text(page, '#hStatus'), /before/i);
+  assert.match(await text(page, '#histWrap'), /Your log is empty/);
+  await ctx.close();
+});
+
+test('usage is measured from one top-up to the next', async () => {
+  const { ctx, page, errors } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'topup', { date: d, time: '08:00', before: 40, token: 100 });   // first entry: starting point, meter now 140
+  await logToken(page, 'topup', { date: d, time: '12:00', before: 60, token: 100 });   // 140 − 60 = 80 used, meter now 160
+  await logToken(page, 'balance', { date: d, time: '20:00', value: 150 });             // 10 used
+  assert.match(await text(page, '#kTotalSub'), /^90,0 kWh/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('a top-up whose kWh before is higher than expected is refused', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logToken(page, 'balance', { date: d, time: '08:00', value: 50 });
+  await logToken(page, 'topup', { date: d, time: '09:00', before: 70, token: 100 });
+  assert.match(await text(page, '#hStatus'), /higher than/i);
+  assert.doesNotMatch(await text(page, '#histWrap'), /Token top-up/);
+  await ctx.close();
+});
+
+test('entries saved with the old "kWh used" option still count', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await page.evaluate((d) => localStorage.setItem('meteran-rumah.v1', JSON.stringify({ version: 1, settings: { homeMode: 'kwh' }, usage: [
+    { id: 'old', date: d, time: '23:59', kwh: 42, createdAt: d + 'T01:00:00Z' } ], charges: [] })), d);
+  await page.reload();
+  assert.match(await text(page, '#kHouseSub'), /^42,0 kWh/);
   await ctx.close();
 });

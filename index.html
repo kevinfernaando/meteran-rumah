@@ -284,21 +284,21 @@ details.settings[open] > summary::after { content: "–"; }
           <div class="field">
             <span class="lbl">What are you entering?</span>
             <div class="radios">
-              <label><input type="radio" name="hMode" id="hModeKwh" value="kwh" checked> kWh used</label>
-              <label><input type="radio" name="hMode" id="hModeMeter" value="meter"> Meter reading</label>
-              <label><input type="radio" name="hMode" id="hModeBalance" value="balance"> Token balance</label>
-              <label><input type="radio" name="hMode" id="hModeTopup" value="topup"> Token top-up</label>
+              <label><input type="radio" name="hMode" id="hModeBalance" value="balance"> Meter reading</label>
+              <label><input type="radio" name="hMode" id="hModeTopup" value="topup" checked> Token top-up</label>
             </div>
           </div>
           <div class="row2">
             <div class="field"><label for="hDate">Date</label><input type="date" id="hDate" required></div>
             <div class="field"><label for="hTime">Time</label><input type="time" id="hTime" required></div>
           </div>
-          <div class="field"><label for="hValue" id="hValueLbl">kWh used</label>
+          <div class="field"><label for="hValue" id="hValueLbl">kWh left before topping up</label>
             <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
+          <div class="field" id="hTokenField"><label for="hToken">Token kWh (from the receipt)</label>
+            <div class="suffix"><input type="number" id="hToken" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
           <div class="field" id="hPaidField" hidden><label for="hPaid">Amount paid (optional)</label>
             <div class="suffix"><input type="number" id="hPaid" min="0" step="1" inputmode="numeric" placeholder="e.g. 100000"><span>Rp</span></div></div>
-          <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. weekly reading"></div>
+          <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. Rp 500.000 token"></div>
           <div class="estimate" id="hEstimate"></div>
           <button class="btn" type="submit" id="hSubmit">Save usage</button>
           <p class="status" id="hStatus" role="status"></p>
@@ -451,7 +451,7 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     const us = S.usage.filter((u) => u.date.startsWith(ym));
     const cs = S.charges.filter((c) => c.date.startsWith(ym));
-    const cons = us.filter((u) => u.kind !== "topup");
+    const cons = us.filter(isConsumption);
     const meter = cons.reduce((a, u) => a + (u.kwh || 0), 0);
     const evInIntervals = cons.reduce((a, u) => a + (u.evKwh || 0), 0);
     const pendingKwh = (S.pending || []).filter((c) => c.date.startsWith(ym)).reduce((a, c) => a + c.kwh, 0);
@@ -669,7 +669,12 @@ details.settings[open] > summary::after { content: "–"; }
       let detail = d.note || "";
       let kwhText = numFmt1.format(d.kwh || 0);
       const withNote = (main) => main + (d.note ? " (" + d.note + ")" : "");
-      if (it.kind === "usage" && d.kind === "topup") {
+      if (it.kind === "usage" && d.kind === "topup" && d.balance != null) {
+        chip.innerHTML = `<i class="sw" style="background:var(--accent)"></i>Token top-up`;
+        tr.children[4].textContent = rp(d.kwh * S.settings.tariff * (1 + S.settings.ppj / 100));
+        detail = withNote(`Remaining ${numFmt2.format(d.balance)} kWh, +${numFmt1.format(d.tokenKwh)} kWh token` + (d.paidRp ? `, paid ${rp(d.paidRp)}` : "")
+          + (d.baseline ? ", starting point" : "") + (d.mismatch ? ", higher than expected: log the missing top-up" : ""));
+      } else if (it.kind === "usage" && d.kind === "topup") {
         chip.innerHTML = `<i class="sw" style="background:var(--accent)"></i>Token top-up`;
         kwhText = "+" + numFmt1.format(d.tokenKwh);
         tr.children[4].textContent = d.paidRp ? rp(d.paidRp) : "—";
@@ -691,7 +696,7 @@ details.settings[open] > summary::after { content: "–"; }
         bits.push(cc.offPeak ? "Night rate −" + S.settings.evDiscount + "%" : "Normal rate");
         detail = bits.join(", ") + (d.note ? " (" + d.note + ")" : "");
       }
-      if (it.kind === "usage" && d.kind !== "topup" && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
+      if (it.kind === "usage" && isConsumption(d) && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
       tr.children[1].append(chip);
       tr.children[2].textContent = detail;
       if (d.example) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Example"; tr.children[2].append(tg); }
@@ -751,14 +756,13 @@ details.settings[open] > summary::after { content: "–"; }
   const entryKey = (u) => u.date + "T" + (u.time || "23:59") + "|" + (u.createdAt || "");
   const evKey = (c) => c.date + "T" + (c.time || "00:00");
   const newEntryKey = (date) => date + "T" + ($("hTime").value || "23:59") + "|" + new Date().toISOString();
-  function lastReadingBefore(date) {
-    const key = newEntryKey(date);
-    return S.usage.filter((u) => u.reading != null && entryKey(u) <= key).sort((a, b) => entryKey(a).localeCompare(entryKey(b))).pop();
-  }
+  // A top-up records the kWh left before the token went in, so it doubles as a meter reading.
+  const isConsumption = (u) => u.kind !== "topup" || u.balance != null;
+  const afterEntry = (u) => u.kind === "topup" ? u.balance + u.tokenKwh : u.balance;
   // Each meter entry covers the time since the previous one, so it subtracts exactly the home charging in that interval.
   // Charging before a starting reading (0 kWh) predates tracking; charging after the latest entry waits for the next one.
   function allocateCharging() {
-    const cons = S.usage.filter((u) => u.kind !== "topup").sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    const cons = S.usage.filter(isConsumption).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
     const evs = S.charges.slice().sort((a, b) => evKey(a).localeCompare(evKey(b)));
     let i = 0;
     cons.forEach((u, n) => {
@@ -773,64 +777,55 @@ details.settings[open] > summary::after { content: "–"; }
   function tokenUsageAt(date, balance) {
     const key = newEntryKey(date);
     const seq = S.usage.filter((u) => (u.kind === "balance" || u.kind === "topup") && entryKey(u) <= key).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
-    let prev = null, added = 0;
+    let prev = null, prevVal = null, added = 0;
     for (const u of seq) {
-      if (u.kind === "balance") { prev = u; added = 0; } else if (prev) added += u.tokenKwh;
+      if (u.kind === "balance" || u.balance != null) { prev = u; prevVal = afterEntry(u); added = 0; }
+      else if (prev) added += u.tokenKwh;   // older top-ups saved without the kWh before
     }
     if (!prev) return { kwh: 0, balance, baseline: true };
-    return { kwh: prev.balance + added - balance, balance, prev, added };
+    return { kwh: prevVal + added - balance, balance, prev, prevVal, added };
   }
   function recomputeTokenUsage() {
     const seq = S.usage.filter((u) => u.kind === "balance" || u.kind === "topup").sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
     let prev = null, added = 0;
     for (const u of seq) {
-      if (u.kind === "topup") { u.kwh = 0; if (prev != null) added += u.tokenKwh; continue; }
+      if (u.kind === "topup" && u.balance == null) { u.kwh = 0; if (prev != null) added += u.tokenKwh; continue; }
       if (prev == null) { u.kwh = 0; u.baseline = true; u.mismatch = false; }
       else {
         const k = prev + added - u.balance;
         u.kwh = Math.max(0, Math.round(k * 100) / 100); u.baseline = false; u.mismatch = k < -0.005;
       }
-      prev = u.balance; added = 0;
+      prev = afterEntry(u); added = 0;
     }
     allocateCharging();
   }
   function homeComputed() {
     const v = parseFloat($("hValue").value), date = $("hDate").value || todayStr();
-    if (!(v >= 0)) return null;
-    if (hMode() === "kwh") return { kwh: v };
-    if (hMode() === "topup") return v > 0 ? { topup: true, tokenKwh: v, paid: parseFloat($("hPaid").value) || 0 } : null;
-    if (hMode() === "balance") return tokenUsageAt(date, v);
-    const prev = lastReadingBefore(date);
-    if (!prev) return { kwh: 0, reading: v, baseline: true };
-    return { kwh: v - prev.reading, reading: v, prev };
+    if (hMode() === "topup") {
+      const token = parseFloat($("hToken").value);
+      if (!(v >= 0)) return token > 0 ? { needBefore: true, tokenKwh: token } : null;
+      return { ...tokenUsageAt(date, v), topup: true, tokenKwh: token > 0 ? token : null, paid: parseFloat($("hPaid").value) || 0 };
+    }
+    return v >= 0 ? tokenUsageAt(date, v) : null;
   }
+  const prevLabel = (h) => `${fmtDate(h.prev.date)}${h.prev.time ? " " + h.prev.time : ""}${h.prev.kind === "topup" ? " (after top-up)" : ""}`;
   function updateEstimates() {
     const st = S.settings;
     const h = homeComputed(), he = $("hEstimate");
-    const mode = hMode();
-    $("hValueLbl").textContent = { kwh: "kWh used", meter: "Meter reading", balance: "Remaining kWh (sisa)", topup: "Token kWh bought" }[mode];
-    $("hPaidField").hidden = mode !== "topup";
-    $("hSubmit").textContent = { kwh: "Save usage", meter: "Save reading", balance: "Save balance", topup: "Save top-up" }[mode];
-    if (mode === "topup") {
-      he.innerHTML = `<span>Token top-up</span><strong></strong><span></span>`;
-      he.children[1].textContent = h ? "+" + kwh(h.tokenKwh) : "—";
-      he.children[2].textContent = h && h.paid ? `Rp ${numFmt0.format(h.paid / h.tokenKwh)} per kWh, including admin fee and taxes` : "Enter the kWh printed on your token receipt";
-    } else if (mode === "balance" && h && h.baseline) he.innerHTML = `<span>First token reading</span><strong>Starting balance</strong><span>Your next balance reading will be compared against this one, adding any top-ups in between.</span>`;
-    else if (mode === "balance" && h && h.kwh < 0) {
-      he.innerHTML = `<span>Check the balance</span><strong>Higher than expected</strong><span></span>`;
-      he.children[2].textContent = `Last reading was ${numFmt2.format(h.prev.balance)} kWh on ${fmtDate(h.prev.date)}` + (h.added ? ` plus ${numFmt2.format(h.added)} kWh topped up` : "") + ". If you bought a token since then, log the top-up first.";
-    } else if (mode === "balance" && h) {
-      he.innerHTML = `<span>Used since ${fmtDate(h.prev.date)}</span><strong></strong><span></span>`;
-      he.children[1].textContent = kwh(h.kwh) + ", " + rp(h.kwh * st.tariff * (1 + st.ppj / 100));
-      he.children[2].textContent = `${numFmt2.format(h.prev.balance)} kWh then` + (h.added ? ` + ${numFmt2.format(h.added)} kWh topped up` : "") + ` − ${numFmt2.format(h.balance)} kWh now. Includes any EV charging on this meter.`;
-    } else if (!h) he.innerHTML = `<span>Estimated cost</span><strong>—</strong><span>At Rp ${numFmt2.format(st.tariff)}/kWh${st.ppj ? " + PPJ " + numFmt2.format(st.ppj) + "%" : ""}</span>`;
-    else if (h.baseline) he.innerHTML = `<span>First meter reading</span><strong>Baseline</strong><span>Saved as the starting point. Your next reading will be compared against it.</span>`;
-    else if (h.kwh < 0) he.innerHTML = `<span>Check the reading</span><strong>${numFmt2.format(h.kwh)} kWh</strong><span>This is lower than your previous reading of ${numFmt2.format(h.prev.reading)} on ${fmtDate(h.prev.date)}.</span>`;
-    else {
-      he.innerHTML = `<span>Estimated cost</span><strong></strong><span></span>`;
-      he.children[1].textContent = rp(h.kwh * st.tariff * (1 + st.ppj / 100));
-      he.children[2].textContent = (h.prev ? `${numFmt2.format(h.kwh)} kWh since ${fmtDate(h.prev.date)}. ` : "") + `Includes any EV charging on this meter.`;
-    }
+    const mode = hMode(), topup = mode === "topup";
+    $("hValueLbl").textContent = topup ? "kWh left before topping up" : "kWh left on the meter";
+    $("hTokenField").hidden = !topup; $("hPaidField").hidden = !topup;
+    $("hSubmit").textContent = topup ? "Save top-up" : "Save reading";
+    he.innerHTML = "<span></span><strong></strong><span></span>";
+    const [t1, t2, t3] = he.children;
+    const cost = (k) => rp(k * st.tariff * (1 + st.ppj / 100));
+    const after = h && h.tokenKwh && h.balance != null ? ` The meter will show ${numFmt2.format(h.balance + h.tokenKwh)} kWh after the top-up.` : "";
+    const price = h && h.paid && h.tokenKwh ? ` Token price: Rp ${numFmt0.format(h.paid / h.tokenKwh)}/kWh incl. admin fee and taxes.` : "";
+    if (!h) { t1.textContent = topup ? "Token top-up" : "Meter reading"; t2.textContent = "—"; t3.textContent = topup ? "Before entering the token, note the kWh left on the meter. Then add the kWh from the receipt." : "Enter the kWh left on your meter (sisa kWh)."; }
+    else if (h.needBefore) { t1.textContent = "Token top-up"; t2.textContent = "+" + kwh(h.tokenKwh); t3.textContent = "Also enter the kWh left before you entered the token, so usage since your last entry can be worked out."; }
+    else if (h.baseline) { t1.textContent = "First entry"; t2.textContent = "Starting point"; t3.textContent = "Usage is counted from here. Every later reading or top-up is compared with the one before it." + after + price; }
+    else if (h.kwh < 0) { t1.textContent = "Check the number"; t2.textContent = "Higher than expected"; t3.textContent = `Your last entry left ${numFmt2.format(h.prevVal + h.added)} kWh on the meter (${prevLabel(h)}). If you bought a token since then, log that top-up first.`; }
+    else { t1.textContent = `Used since ${prevLabel(h)}`; t2.textContent = kwh(h.kwh) + ", " + cost(h.kwh); t3.textContent = `${numFmt2.format(h.prevVal + h.added)} kWh then − ${numFmt2.format(h.balance)} kWh now. Includes any EV charging on this meter.` + after + price; }
     const socMode = eMode() === "soc", e = evComputed(), ee = $("eEstimate");
     $("eSocFields").hidden = !socMode; $("eKwhField").hidden = socMode;
     const c = { kwh: e && e.kwh ? e.kwh : 0, place: "home", time: $("eTime").value };
@@ -906,25 +901,25 @@ details.settings[open] > summary::after { content: "–"; }
     ev.preventDefault();
     const h = homeComputed(), date = $("hDate").value;
     if (!date) return setStatus("hStatus", "Pick a date.", "err");
-    if (!h) return setStatus("hStatus", "Enter a number of kWh.", "err");
     const mode = hMode(), note = $("hNote").value.trim(), createdAt = new Date().toISOString(), time = $("hTime").value || "23:59";
     let doc, msg;
     if (mode === "topup") {
-      doc = { date, time, kind: "topup", tokenKwh: Math.round(h.tokenKwh * 100) / 100, kwh: 0, note, createdAt };
+      if (h && h.needBefore) return setStatus("hStatus", "Enter the kWh left on the meter before you entered the token.", "err");
+      if (!h) return setStatus("hStatus", "Enter the kWh left before topping up and the token kWh.", "err");
+      if (!h.tokenKwh) return setStatus("hStatus", "Enter the token kWh from your receipt.", "err");
+      if (h.kwh < 0) return setStatus("hStatus", "The kWh before topping up is higher than your last entry left. Check the number, or log any missing top-up first.", "err");
+      doc = { date, time, kind: "topup", balance: h.balance, tokenKwh: Math.round(h.tokenKwh * 100) / 100, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
       if (h.paid > 0) doc.paidRp = Math.round(h.paid);
-      msg = "Top-up saved: +" + kwh(doc.tokenKwh) + ".";
-    } else if (mode === "balance") {
-      if (h.kwh < 0) return setStatus("hStatus", "The remaining kWh went up since your last reading. If you bought a token, log the top-up first, then the balance.", "err");
-      doc = { date, time, kind: "balance", balance: h.balance, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
-      msg = h.baseline ? "Starting balance saved." : "Saved " + kwh(doc.kwh) + " used.";
+      const nowOn = numFmt2.format(h.balance + doc.tokenKwh);
+      msg = h.baseline ? `Top-up saved. The meter starts at ${nowOn} kWh.` : `Top-up saved: ${kwh(doc.kwh)} used since your last entry, meter now at ${nowOn} kWh.`;
     } else {
-      if (h.kwh < 0) return setStatus("hStatus", "That reading is below the previous one. Check the meter and try again.", "err");
-      doc = { date, time, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
-      if (h.reading != null) doc.reading = h.reading;
-      msg = h.baseline ? "Baseline reading saved." : "Saved " + kwh(doc.kwh) + ".";
+      if (!h) return setStatus("hStatus", "Enter the kWh left on the meter.", "err");
+      if (h.kwh < 0) return setStatus("hStatus", "The kWh left went up since your last entry. If you bought a token, log the top-up first.", "err");
+      doc = { date, time, kind: "balance", balance: h.balance, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
+      msg = h.baseline ? "Starting reading saved." : "Saved " + kwh(doc.kwh) + " used.";
     }
     $("hSubmit").disabled = true;
-    try { await save("usage", doc); setStatus("hStatus", msg, "ok"); $("hValue").value = ""; $("hPaid").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
+    try { await save("usage", doc); setStatus("hStatus", msg, "ok"); $("hValue").value = ""; $("hToken").value = ""; $("hPaid").value = ""; $("hNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("hStatus", e.message, "err"); }
     finally { $("hSubmit").disabled = !S.canWrite; }
   });
@@ -1018,26 +1013,32 @@ details.settings[open] > summary::after { content: "–"; }
     const end = new Date(); end.setHours(12, 0, 0, 0);
     const start = new Date(end.getFullYear(), end.getMonth() - 3, 1, 12);
     const charges = [], usage = [];
+    const st = S.settings;
     for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const wd = d.getDay();
-      if ((wd === 1 || wd === 3 || wd === 5) && rnd() < 0.9)
-        charges.push({ date: iso(d), time: pick(["22:15", "22:30", "22:45", "23:00", "21:30", "19:10"]), kwh: +uni(16, 31).toFixed(1), place: "home", note: "" });
+      if ((wd === 1 || wd === 3 || wd === 5) && rnd() < 0.9) {
+        const from = Math.round(uni(15, 45)), to = pick([80, 80, 90, 100]);
+        const battery = (to - from) / 100 * st.batteryKwh;
+        charges.push({ date: iso(d), time: pick(["22:15", "22:30", "22:45", "23:00", "21:30", "19:10"]), kwh: Math.round(battery / (st.chargeEff / 100) * 100) / 100,
+          socFrom: from, socTo: to, batteryKwh: Math.round(battery * 100) / 100, place: "home", note: "" });
+      }
     }
-    let reading = 18234.5, prev = new Date(start); prev.setDate(prev.getDate() - 1);
-    usage.push({ date: iso(start), time: "08:00", kwh: 0, reading, note: "Starting reading" });
-    const logDays = [];
-    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) if (d.getDay() === 0) logDays.push(new Date(d));
-    if (!logDays.length || iso(logDays[logDays.length - 1]) !== iso(end)) logDays.push(new Date(end));
-    for (const ld of logDays) {
-      let house = 0;
-      for (const d = new Date(prev); d.setDate(d.getDate() + 1) && d <= ld;) house += uni(8.2, 11.4);
-      const ev = charges.filter((c) => c.place === "home" && c.date > iso(prev) && c.date <= iso(ld)).reduce((a, c) => a + c.kwh, 0);
-      const k = Math.round((house + ev) * 10) / 10;
-      reading = Math.round((reading + k) * 10) / 10;
-      usage.push({ date: iso(ld), time: "20:00", kwh: k, reading, note: "Weekly reading" });
-      prev = ld;
+    // Simulate a token meter: house use every day, the car's charging at night, a token whenever it runs low, a reading on Sundays.
+    const tokens = [{ paid: 500000, kwh: 334.8 }, { paid: 200000, kwh: 133.4 }];
+    let bal = 120;
+    const r1 = (x) => Math.round(x * 10) / 10;
+    usage.push({ date: iso(start), time: "07:00", kind: "balance", balance: bal, kwh: 0, note: "Starting reading" });
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      if (bal < 90 && iso(d) !== iso(start)) {
+        const t = pick(tokens);
+        usage.push({ date: iso(d), time: "07:30", kind: "topup", balance: r1(bal), tokenKwh: t.kwh, paidRp: t.paid, kwh: 0, note: "" });
+        bal = r1(bal) + t.kwh;
+      }
+      bal -= uni(8.2, 11.4);
+      if (d.getDay() === 0) { bal = r1(bal); usage.push({ date: iso(d), time: "20:00", kind: "balance", balance: bal, kwh: 0, note: "Weekly reading" }); }
+      for (const c of charges) if (c.date === iso(d)) bal -= c.kwh;
     }
-    const tag = (x) => ({ ...x, id: newId(), example: true, createdAt: x.date + "T12:00:00.000Z" });
+    const tag = (x) => ({ ...x, id: newId(), example: true, createdAt: x.date + "T" + x.time + ":00.000Z" });
     return { usage: usage.map(tag), charges: charges.map(tag) };
   }
   function loadExamples() {
@@ -1090,7 +1091,7 @@ details.settings[open] > summary::after { content: "–"; }
   }
   $("tabHome").addEventListener("click", () => selectTab("home"));
   $("tabEv").addEventListener("click", () => selectTab("ev"));
-  ["hValue", "hDate", "hTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
+  ["hValue", "hDate", "hTime", "hToken"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   ["eKwh", "eTime", "eSocFrom", "eSocTo"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   document.querySelectorAll('input[name="eMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.evMode = r.value; persist(); updateEstimates(); }));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", updateEstimates));
