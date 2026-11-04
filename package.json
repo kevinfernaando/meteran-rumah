@@ -1,0 +1,6 @@
+{
+  "name": "meteran-rumah",
+  "private": true,
+  "description": "Home electricity and EV charging tracker in Rupiah",
+  "scripts": { "test": "node --test tests/app.test.js" }
+}
