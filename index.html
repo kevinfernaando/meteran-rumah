@@ -161,8 +161,12 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .tag { font-size: .72rem; font-weight: 500; border: 1px solid var(--line); color: var(--muted); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
 .del { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: .8rem; white-space: nowrap; }
 .del:hover { border-color: var(--line); color: var(--ink); }
-.del.armed { border-color: var(--critical); color: var(--critical); }
+.del.armed, .btn.ghost.armed { border-color: var(--critical); color: var(--critical); }
 .emptybox { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--ink-2); display: grid; gap: 4px; }
+.active-charge { display: grid; gap: 10px; border: 1px solid var(--s2); border-radius: var(--r); padding: 14px; background: color-mix(in srgb, var(--s2) 7%, var(--surface)); }
+.active-charge > strong { font-size: 1.05rem; }
+#eFormBody { display: grid; gap: 12px; }
+.notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .emptybox .btn { justify-self: center; margin-top: 8px; }
 .data-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
 .filebtn { position: relative; overflow: hidden; display: inline-flex; align-items: center; cursor: pointer; }
@@ -301,6 +305,18 @@ details.settings[open] > summary::after { content: "–"; }
         </form>
 
         <form id="formEv" role="tabpanel" aria-labelledby="tabEv" hidden novalidate>
+          <div class="active-charge" id="eActive" hidden>
+            <strong>Charging now</strong>
+            <span id="eActiveInfo"></span>
+            <div class="field"><label for="eFinishTo">Battery when you unplug</label>
+              <div class="suffix"><input type="number" id="eFinishTo" min="0" max="100" step="1" inputmode="numeric" placeholder="80"><span>%</span></div></div>
+            <div class="estimate" id="eActiveEst"></div>
+            <div class="data-actions">
+              <button class="btn" type="button" id="eFinish">Finish charging</button>
+              <button class="btn ghost" type="button" id="eDiscard">Discard</button>
+            </div>
+          </div>
+          <div id="eFormBody">
           <div class="field">
             <span class="lbl">How do you want to log it?</span>
             <div class="radios">
@@ -323,6 +339,7 @@ details.settings[open] > summary::after { content: "–"; }
           <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. overnight charge"></div>
           <div class="estimate" id="eEstimate"></div>
           <button class="btn" type="submit" id="eSubmit">Save charging session</button>
+          </div>
           <p class="status" id="eStatus" role="status"></p>
         </form>
       </section>
@@ -392,7 +409,7 @@ details.settings[open] > summary::after { content: "–"; }
   const S = {
     usage: [], charges: [], settings: { ...DEFAULTS },
     month: ymOf(new Date()), unit: "rp",
-    canWrite: true, storageOk: true, legacyPublic: [],
+    canWrite: true, storageOk: true, legacyPublic: [], active: null,
   };
 
   /* ---------- formatting ---------- */
@@ -700,24 +717,30 @@ details.settings[open] > summary::after { content: "–"; }
     const n = $("notice");
     const msgs = [];
     if (S.offlineMsg) msgs.push(S.offlineMsg);
-    const firstRun = !S.usage.length && !S.charges.length;
+    const firstRun = !S.usage.length && !S.charges.length && !S.active;
+    if (S.active) msgs.push(`Your car has been charging since ${S.active.time} (${fmtDate(S.active.date)}, from ${numFmt0.format(S.active.socFrom)}%). Add the battery % when you unplug.`);
     if (firstRun) msgs.push("Welcome! Log your meter or a charging session to get started, or look around with example data first.");
     if (exampleCount) msgs.push(`You're looking at ${exampleCount} example entries so you can see how the app works. Clear them when you start logging your own.`);
     if (!msgs.length) { n.hidden = true; return; }
-    n.innerHTML = "<span></span>"; n.firstChild.textContent = msgs.join(" ");
+    n.innerHTML = '<span></span><div class="notice-actions"></div>'; n.firstChild.textContent = msgs.join(" ");
+    const actions = n.lastChild;
+    if (S.active) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = "Finish charging";
+      b.addEventListener("click", () => { selectTab("ev"); $("eFinishTo").focus(); }); actions.append(b);
+    }
     if (firstRun) {
       const b = document.createElement("button"); b.type = "button"; b.id = "loadExamples"; b.textContent = "Try it with example data";
-      b.addEventListener("click", loadExamples); n.append(b);
+      b.addEventListener("click", loadExamples); actions.append(b);
     } else if (exampleCount) {
       const b = document.createElement("button"); b.type = "button"; b.textContent = "Clear examples";
-      b.addEventListener("click", clearExamples); n.append(b);
+      b.addEventListener("click", clearExamples); actions.append(b);
     }
     n.hidden = false;
   }
 
   function render() {
     const A = monthAgg(S.month);
-    renderSummary(A); renderCharts(); renderHistory(A);
+    renderSummary(A); renderCharts(); renderHistory(A); renderActive();
     renderNotice(S.usage.filter((u) => u.example).length + S.charges.filter((c) => c.example).length);
     updateEstimates();
   }
@@ -815,7 +838,9 @@ details.settings[open] > summary::after { content: "–"; }
     ee.innerHTML = `<span>Estimated cost</span><strong></strong><span></span>`;
     ee.children[1].textContent = e && e.kwh ? rp(cc.rp) : "—";
     const rate = cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
-    if (e && e.invalid) { ee.children[0].textContent = "Check the percentages"; ee.children[2].textContent = "Battery after charging has to be higher than before."; }
+    $("eSubmit").textContent = e && e.startOnly ? "Start charging" : "Save charging session";
+    if (e && e.startOnly) { ee.children[0].textContent = "Start a charging session"; ee.children[1].textContent = "From " + numFmt0.format(e.from) + "%"; ee.children[2].textContent = `Save now and add the battery % when you unplug. ${rate}.`; }
+    else if (e && e.invalid) { ee.children[0].textContent = "Check the percentages"; ee.children[2].textContent = "Battery after charging has to be higher than before."; }
     else if (socMode && e) ee.children[2].textContent = `${numFmt0.format(e.to - e.from)}% of ${numFmt1.format(st.batteryKwh)} kWh = ${numFmt1.format(e.battery)} kWh into the battery, about ${numFmt1.format(e.kwh)} kWh from your meter at ${numFmt0.format(st.chargeEff)}% efficiency. ${rate}.`;
     else if (socMode) ee.children[2].textContent = `Enter the battery % shown in the car before and after charging. ${rate}.`;
     else ee.children[2].textContent = rate;
@@ -826,6 +851,7 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     if (eMode() === "kwh") { const k = parseFloat($("eKwh").value); return k > 0 ? { kwh: k } : null; }
     const from = parseFloat($("eSocFrom").value), to = parseFloat($("eSocTo").value);
+    if (from >= 0 && from <= 100 && $("eSocTo").value.trim() === "") return { startOnly: true, from };
     if (!(from >= 0 && from <= 100 && to >= 0 && to <= 100)) return null;
     if (to <= from) return { invalid: true, from, to };
     const battery = (to - from) / 100 * st.batteryKwh;
@@ -849,6 +875,8 @@ details.settings[open] > summary::after { content: "–"; }
       S.legacyPublic = charges.filter((c) => c.place === "public");
       S.charges = charges.filter((c) => c.place !== "public");
       S.settings = { ...DEFAULTS, ...(data.settings || {}) };
+      const a = data.activeCharge;
+      S.active = a && typeof a.date === "string" && typeof a.socFrom === "number" ? a : null;
       recomputeTokenUsage();
       S.storageOk = true;
     } catch { S.storageOk = false; }
@@ -856,7 +884,7 @@ details.settings[open] > summary::after { content: "–"; }
   function persist() {
     recomputeTokenUsage();
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic] }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, settings: S.settings, usage: S.usage, charges: [...S.charges, ...S.legacyPublic], activeCharge: S.active }));
       S.storageOk = true; S.offlineMsg = "";
       return true;
     } catch (e) {
@@ -903,9 +931,15 @@ details.settings[open] > summary::after { content: "–"; }
 
   $("formEv").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (S.active) return finishCharge();
     const date = $("eDate").value, e = evComputed(), place = "home";
     if (!date) return setStatus("eStatus", "Pick a date.", "err");
     if (e && e.invalid) return setStatus("eStatus", "Battery after charging has to be higher than before.", "err");
+    if (e && e.startOnly) {
+      S.active = { date, time: $("eTime").value || "00:00", socFrom: e.from, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
+      persist(); $("eSocFrom").value = ""; $("eNote").value = ""; render();
+      return setStatus("eStatus", `Charging started at ${numFmt0.format(e.from)}%. Add the battery % here when you unplug.`, "ok");
+    }
     if (!e) return setStatus("eStatus", eMode() === "soc" ? "Enter the battery % before and after charging (0–100)." : "Enter the energy added in kWh.", "err");
     const doc = { date, time: $("eTime").value || "00:00", kwh: Math.round(e.kwh * 100) / 100, place, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
     if (e.battery != null) Object.assign(doc, { socFrom: e.from, socTo: e.to, batteryKwh: Math.round(e.battery * 100) / 100 });
@@ -913,6 +947,53 @@ details.settings[open] > summary::after { content: "–"; }
     try { await save("charges", doc); setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok"); $("eKwh").value = ""; $("eSocFrom").value = ""; $("eSocTo").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("eStatus", e.message, "err"); }
     finally { $("eSubmit").disabled = !S.canWrite; }
+  });
+
+  function activeComputed() {
+    const a = S.active, st = S.settings, to = parseFloat($("eFinishTo").value);
+    if (!a || !(to >= 0 && to <= 100)) return null;
+    if (to <= a.socFrom) return { invalid: true };
+    const battery = (to - a.socFrom) / 100 * st.batteryKwh;
+    return { to, battery, kwh: battery / (st.chargeEff / 100) };
+  }
+  function renderActive() {
+    const a = S.active;
+    $("eActive").hidden = !a; $("eFormBody").hidden = !!a;
+    if (!a) return;
+    $("eActiveInfo").textContent = `Started ${fmtDate(a.date)} at ${a.time} with the battery at ${numFmt0.format(a.socFrom)}%.` + (a.note ? ` (${a.note})` : "");
+    const r = activeComputed(), est = $("eActiveEst");
+    est.innerHTML = "<span></span><strong></strong><span></span>";
+    if (!r) { est.children[0].textContent = "Estimated cost"; est.children[1].textContent = "—"; est.children[2].textContent = "Enter the battery % shown in the car when you unplug."; }
+    else if (r.invalid) { est.children[0].textContent = "Check the percentage"; est.children[1].textContent = "—"; est.children[2].textContent = `It has to be higher than the ${numFmt0.format(a.socFrom)}% you started with.`; }
+    else {
+      const cc = chargeCost({ kwh: r.kwh, place: "home", time: a.time });
+      est.children[0].textContent = "Estimated cost"; est.children[1].textContent = rp(cc.rp);
+      est.children[2].textContent = `${numFmt1.format(r.battery)} kWh into the battery, about ${numFmt1.format(r.kwh)} kWh from your meter.` + (cc.offPeak ? ` Night rate applies (started ${a.time}).` : "");
+    }
+  }
+  async function finishCharge() {
+    const a = S.active, r = activeComputed();
+    if (r && r.invalid) return setStatus("eStatus", `Battery when you unplug has to be higher than the ${numFmt0.format(a.socFrom)}% you started with.`, "err");
+    if (!r) return setStatus("eStatus", "Enter the battery % shown in the car when you unplug (0–100).", "err");
+    const doc = { date: a.date, time: a.time, kwh: Math.round(r.kwh * 100) / 100, place: "home", socFrom: a.socFrom, socTo: r.to,
+      batteryKwh: Math.round(r.battery * 100) / 100, note: a.note || "", createdAt: a.createdAt, endedAt: new Date().toISOString() };
+    S.active = null; $("eFinishTo").value = "";
+    await save("charges", doc);
+    S.month = a.date.slice(0, 7); render();
+    setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok");
+  }
+  $("eFinish").addEventListener("click", finishCharge);
+  $("eFinishTo").addEventListener("input", renderActive);
+  $("eDiscard").addEventListener("click", () => {
+    const b = $("eDiscard");
+    if (!b.classList.contains("armed")) {
+      b.classList.add("armed"); b.textContent = "Tap again to discard";
+      setTimeout(() => { b.classList.remove("armed"); b.textContent = "Discard"; }, 4000);
+      return;
+    }
+    b.classList.remove("armed"); b.textContent = "Discard";
+    S.active = null; $("eFinishTo").value = ""; persist(); render();
+    setStatus("eStatus", "Charging session discarded.", "ok");
   });
 
   function removeEntry(kind, id) {
@@ -1065,7 +1146,7 @@ details.settings[open] > summary::after { content: "–"; }
   if (!S.storageOk) S.offlineMsg = "This browser isn't letting the page save (private mode or blocked site data). Entries will be lost when you close it.";
   openLatestMonth();
   $("hDate").value = todayStr(); $("eDate").value = todayStr();
-  { const n = new Date(); $("hTime").value = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0"); }
+  { const n = new Date(); $("hTime").value = $("eTime").value = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0"); }
   fillSettings(); render();
   let raf = 0;
   new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderCharts); }).observe($("trendChart"));

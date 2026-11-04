@@ -293,3 +293,54 @@ test('battery percentage is the default way to log a charge', async () => {
   assert.equal(await page.isChecked('#eModeSoc'), true);
   await ctx.close();
 });
+
+/* ---------- two-step charging: start now, finish when unplugging ---------- */
+async function startCharge(page, { date, time, from }) {
+  await page.click('#tabEv');
+  await page.check('#eModeSoc');
+  await page.fill('#eDate', date); await page.fill('#eTime', time);
+  await page.fill('#eSocFrom', String(from));
+  await page.click('#eSubmit');
+}
+
+test('a charge can be started with only the battery before, and finished later with the battery after', async () => {
+  const { ctx, page, errors } = await freshPage();
+  const d = await todayIn(page);
+  await startCharge(page, { date: d, time: '22:30', from: 20 });
+  assert.match(await text(page, '#histWrap'), /Your log is empty/);          // not counted until it's finished
+  await page.reload();                                                       // e.g. coming back in the morning
+  assert.match(await text(page, '#notice'), /charging since 22:30/i);
+  await page.click('#tabEv');
+  assert.match(await text(page, '#eActive'), /20%/);
+  await page.fill('#eFinishTo', '80');
+  await page.click('#eFinish');
+  assert.match(await text(page, '#kEvHomeSub'), /^39,3 kWh/);                // same as logging 20% → 80% in one go
+  assert.equal(await text(page, '#kEvHome'), 'Rp 39.713');                  // started at 22:30, so night rate
+  assert.match(await text(page, '#histWrap'), /20% → 80%/);
+  assert.equal(await page.locator('#eActive').isHidden(), true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('finishing below the starting battery is refused and the session stays open', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await startCharge(page, { date: d, time: '22:30', from: 60 });
+  await page.fill('#eFinishTo', '50');
+  await page.click('#eFinish');
+  assert.match(await text(page, '#eStatus'), /higher than/i);
+  assert.equal(await page.locator('#eActive').isVisible(), true);
+  await ctx.close();
+});
+
+test('an open charging session can be discarded', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await startCharge(page, { date: d, time: '22:30', from: 30 });
+  await page.click('#eDiscard'); await page.click('#eDiscard');               // second tap confirms
+  assert.equal(await page.locator('#eActive').isHidden(), true);
+  await page.reload();
+  assert.doesNotMatch(await text(page, '#notice'), /charging since/i);
+  assert.match(await text(page, '#histWrap'), /Your log is empty/);
+  await ctx.close();
+});
