@@ -35,6 +35,7 @@ const text = async (page, sel) => (await page.locator(sel).innerText()).replace(
 
 async function logEv(page, { date, time, kwh }) {
   await page.click('#tabEv');
+  await page.check('#eModeKwh');
   await page.fill('#eDate', date); await page.fill('#eTime', time); await page.fill('#eKwh', String(kwh));
   await page.click('#eSubmit');
 }
@@ -243,5 +244,52 @@ test('the time of day decides which reading a same-day charge belongs to', async
   await logMeter(page, { date: d, time: '23:30', kwh: 10, mode: 'balance' });            // 15 used, 10 of it the car
   assert.match(await text(page, '#kHouseSub'), /^30,0 kWh/);                              // 25 + (15 − 10)
   assert.doesNotMatch(await text(page, '#bdHint'), /since your last reading/);
+  await ctx.close();
+});
+
+/* ---------- EV charging by battery percentage ---------- */
+async function logSoc(page, { date, time, from, to }) {
+  await page.click('#tabEv');
+  await page.check('#eModeSoc');
+  await page.fill('#eDate', date); await page.fill('#eTime', time);
+  await page.fill('#eSocFrom', String(from)); await page.fill('#eSocTo', String(to));
+  await page.click('#eSubmit');
+}
+
+test('battery percentages are turned into kWh drawn from the meter for a Jaecoo J5 EV', async () => {
+  const { ctx, page, errors } = await freshPage();
+  const d = await todayIn(page);
+  await logSoc(page, { date: d, time: '22:30', from: 20, to: 80 });
+  // 60% of 58,9 kWh usable = 35,34 kWh into the battery; at 90% charging efficiency ≈ 39,27 kWh from the meter
+  assert.match(await text(page, '#kEvHomeSub'), /^39,3 kWh/);
+  assert.equal(await text(page, '#kEvHome'), 'Rp 39.713');            // 39,27 × 1.444,70 × 0,7 night rate
+  assert.match(await text(page, '#histWrap'), /20% → 80%/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('a charge that ends lower than it started is refused', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logSoc(page, { date: d, time: '22:30', from: 70, to: 40 });
+  assert.match(await text(page, '#eStatus'), /higher than/i);
+  assert.match(await text(page, '#histWrap'), /Your log is empty/);
+  await ctx.close();
+});
+
+test('battery size and charging efficiency can be changed in settings', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#settingsBox summary');
+  await page.fill('#sBattery', '50'); await page.fill('#sEff', '100'); await page.click('#sSubmit');
+  const d = await todayIn(page);
+  await logSoc(page, { date: d, time: '22:30', from: 10, to: 60 });   // 50% of 50 kWh at 100%
+  assert.match(await text(page, '#kEvHomeSub'), /^25,0 kWh/);
+  await ctx.close();
+});
+
+test('battery percentage is the default way to log a charge', async () => {
+  const { ctx, page } = await freshPage();
+  await page.click('#tabEv');
+  assert.equal(await page.isChecked('#eModeSoc'), true);
   await ctx.close();
 });

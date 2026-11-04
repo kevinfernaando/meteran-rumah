@@ -301,15 +301,26 @@ details.settings[open] > summary::after { content: "–"; }
         </form>
 
         <form id="formEv" role="tabpanel" aria-labelledby="tabEv" hidden novalidate>
+          <div class="field">
+            <span class="lbl">How do you want to log it?</span>
+            <div class="radios">
+              <label><input type="radio" name="eMode" id="eModeSoc" value="soc" checked> Battery %</label>
+              <label><input type="radio" name="eMode" id="eModeKwh" value="kwh"> kWh from charger</label>
+            </div>
+          </div>
           <div class="row2">
             <div class="field"><label for="eDate">Date</label><input type="date" id="eDate" required></div>
             <div class="field"><label for="eTime">Start time</label><input type="time" id="eTime" value="22:00" required></div>
           </div>
-          <div class="row2">
-            <div class="field"><label for="eKwh">Energy added</label>
-              <div class="suffix"><input type="number" id="eKwh" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
+          <div class="row2" id="eSocFields">
+            <div class="field"><label for="eSocFrom">Battery before</label>
+              <div class="suffix"><input type="number" id="eSocFrom" min="0" max="100" step="1" inputmode="numeric" placeholder="20"><span>%</span></div></div>
+            <div class="field"><label for="eSocTo">Battery after</label>
+              <div class="suffix"><input type="number" id="eSocTo" min="0" max="100" step="1" inputmode="numeric" placeholder="80"><span>%</span></div></div>
           </div>
-          <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. 20% → 80%"></div>
+          <div class="field" id="eKwhField" hidden><label for="eKwh">Energy from the charger</label>
+            <div class="suffix"><input type="number" id="eKwh" min="0" step="0.01" inputmode="decimal" placeholder="0"><span>kWh</span></div></div>
+          <div class="field"><label for="eNote">Note (optional)</label><input type="text" id="eNote" maxlength="120" placeholder="e.g. overnight charge"></div>
           <div class="estimate" id="eEstimate"></div>
           <button class="btn" type="submit" id="eSubmit">Save charging session</button>
           <p class="status" id="eStatus" role="status"></p>
@@ -318,7 +329,7 @@ details.settings[open] > summary::after { content: "–"; }
 
       <section class="panel">
         <details class="settings" id="settingsBox">
-          <summary><h2>Tariff settings</h2></summary>
+          <summary><h2>Tariff and car settings</h2></summary>
           <form id="formSettings" novalidate>
             <div class="settings-grid">
               <div class="field"><label for="sPreset">PLN household tariff (by your meter's VA rating)</label>
@@ -338,8 +349,12 @@ details.settings[open] > summary::after { content: "–"; }
                 <div class="suffix"><input type="number" id="sDisc" min="0" max="100" step="1"><span>%</span></div></div>
               <div class="field"><label for="sFrom">Discount window starts</label><input type="time" id="sFrom" step="3600"></div>
               <div class="field"><label for="sTo">Discount window ends</label><input type="time" id="sTo" step="3600"></div>
+              <div class="field"><label for="sBattery">Usable battery</label>
+                <div class="suffix"><input type="number" id="sBattery" min="1" step="0.1"><span>kWh</span></div></div>
+              <div class="field"><label for="sEff">Charging efficiency</label>
+                <div class="suffix"><input type="number" id="sEff" min="50" max="100" step="1"><span>%</span></div></div>
             </div>
-            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. The night discount applies to home charging sessions that start inside the window. PPJ is added on top of the PLN rate.</p>
+            <p class="hint">Presets are PLN's non-subsidised household rates; check your bill or token receipt and edit if they've changed. The night discount applies to home charging sessions that start inside the window. PPJ is added on top of the PLN rate. The car defaults are for a Jaecoo J5 EV (60,9 kWh battery, about 58,9 kWh usable). Home AC charging loses roughly 10% as heat, so the meter sees more than the battery stores.</p>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
               <button class="btn" type="submit" id="sSubmit">Save settings</button>
               <p class="status" id="sStatus" role="status"></p>
@@ -373,7 +388,7 @@ details.settings[open] > summary::after { content: "–"; }
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, evDiscount: 30, discFrom: 22, discTo: 5 };
+  const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, evDiscount: 30, discFrom: 22, discTo: 5, batteryKwh: 58.9, chargeEff: 90 };
   const S = {
     usage: [], charges: [], settings: { ...DEFAULTS },
     month: ymOf(new Date()), unit: "rp",
@@ -655,9 +670,9 @@ details.settings[open] > summary::after { content: "–"; }
         chip.innerHTML = `<i class="sw s2"></i>EV home`;
         tr.children[4].textContent = rp(cc.rp);
         const bits = [];
+        if (d.socFrom != null) bits.push(`${numFmt0.format(d.socFrom)}% → ${numFmt0.format(d.socTo)}%, ${numFmt1.format(d.batteryKwh)} kWh into battery`);
         bits.push(cc.offPeak ? "Night rate −" + S.settings.evDiscount + "%" : "Normal rate");
-        if (d.note) bits.push(d.note);
-        detail = bits[0] + (bits[1] ? " (" + bits[1] + ")" : "");
+        detail = bits.join(", ") + (d.note ? " (" + d.note + ")" : "");
       }
       if (it.kind === "usage" && d.kind !== "topup" && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
       tr.children[1].append(chip);
@@ -793,12 +808,28 @@ details.settings[open] > summary::after { content: "–"; }
       he.children[1].textContent = rp(h.kwh * st.tariff * (1 + st.ppj / 100));
       he.children[2].textContent = (h.prev ? `${numFmt2.format(h.kwh)} kWh since ${fmtDate(h.prev.date)}. ` : "") + `Includes any EV charging on this meter.`;
     }
-    const k = parseFloat($("eKwh").value), ee = $("eEstimate");
-    const c = { kwh: k >= 0 ? k : 0, place: "home", time: $("eTime").value };
+    const socMode = eMode() === "soc", e = evComputed(), ee = $("eEstimate");
+    $("eSocFields").hidden = !socMode; $("eKwhField").hidden = socMode;
+    const c = { kwh: e && e.kwh ? e.kwh : 0, place: "home", time: $("eTime").value };
     const cc = chargeCost(c);
     ee.innerHTML = `<span>Estimated cost</span><strong></strong><span></span>`;
-    ee.children[1].textContent = k > 0 ? rp(cc.rp) : "—";
-    ee.children[2].textContent = cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
+    ee.children[1].textContent = e && e.kwh ? rp(cc.rp) : "—";
+    const rate = cc.offPeak ? `Night rate: ${st.evDiscount}% off between ${hh(st.discFrom)} and ${hh(st.discTo)}` : `Normal rate. Start between ${hh(st.discFrom)} and ${hh(st.discTo)} for ${st.evDiscount}% off`;
+    if (e && e.invalid) { ee.children[0].textContent = "Check the percentages"; ee.children[2].textContent = "Battery after charging has to be higher than before."; }
+    else if (socMode && e) ee.children[2].textContent = `${numFmt0.format(e.to - e.from)}% of ${numFmt1.format(st.batteryKwh)} kWh = ${numFmt1.format(e.battery)} kWh into the battery, about ${numFmt1.format(e.kwh)} kWh from your meter at ${numFmt0.format(st.chargeEff)}% efficiency. ${rate}.`;
+    else if (socMode) ee.children[2].textContent = `Enter the battery % shown in the car before and after charging. ${rate}.`;
+    else ee.children[2].textContent = rate;
+  }
+  const eMode = () => document.querySelector('input[name="eMode"]:checked').value;
+  // Battery % → kWh: share of the usable battery, divided by charging efficiency to get what the home meter sees.
+  function evComputed() {
+    const st = S.settings;
+    if (eMode() === "kwh") { const k = parseFloat($("eKwh").value); return k > 0 ? { kwh: k } : null; }
+    const from = parseFloat($("eSocFrom").value), to = parseFloat($("eSocTo").value);
+    if (!(from >= 0 && from <= 100 && to >= 0 && to <= 100)) return null;
+    if (to <= from) return { invalid: true, from, to };
+    const battery = (to - from) / 100 * st.batteryKwh;
+    return { kwh: battery / (st.chargeEff / 100), battery, from, to };
   }
   function setStatus(id, msg, kind) { const s = $(id); s.textContent = msg; s.className = "status" + (kind ? " " + kind : ""); }
 
@@ -872,12 +903,14 @@ details.settings[open] > summary::after { content: "–"; }
 
   $("formEv").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const date = $("eDate").value, k = parseFloat($("eKwh").value), place = "home";
+    const date = $("eDate").value, e = evComputed(), place = "home";
     if (!date) return setStatus("eStatus", "Pick a date.", "err");
-    if (!(k > 0)) return setStatus("eStatus", "Enter the energy added in kWh.", "err");
-    const doc = { date, time: $("eTime").value || "00:00", kwh: Math.round(k * 100) / 100, place, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
+    if (e && e.invalid) return setStatus("eStatus", "Battery after charging has to be higher than before.", "err");
+    if (!e) return setStatus("eStatus", eMode() === "soc" ? "Enter the battery % before and after charging (0–100)." : "Enter the energy added in kWh.", "err");
+    const doc = { date, time: $("eTime").value || "00:00", kwh: Math.round(e.kwh * 100) / 100, place, note: $("eNote").value.trim(), createdAt: new Date().toISOString() };
+    if (e.battery != null) Object.assign(doc, { socFrom: e.from, socTo: e.to, batteryKwh: Math.round(e.battery * 100) / 100 });
     $("eSubmit").disabled = true;
-    try { await save("charges", doc); setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok"); $("eKwh").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
+    try { await save("charges", doc); setStatus("eStatus", "Saved " + kwh(doc.kwh) + ", " + rp(chargeCost(doc).rp) + ".", "ok"); $("eKwh").value = ""; $("eSocFrom").value = ""; $("eSocTo").value = ""; $("eNote").value = ""; S.month = date.slice(0, 7); render(); }
     catch (e) { setStatus("eStatus", e.message, "err"); }
     finally { $("eSubmit").disabled = !S.canWrite; }
   });
@@ -977,7 +1010,8 @@ details.settings[open] > summary::after { content: "–"; }
   $("tabHome").addEventListener("click", () => selectTab("home"));
   $("tabEv").addEventListener("click", () => selectTab("ev"));
   ["hValue", "hDate", "hTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
-  ["eKwh", "eTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
+  ["eKwh", "eTime", "eSocFrom", "eSocTo"].forEach((id) => $(id).addEventListener("input", updateEstimates));
+  document.querySelectorAll('input[name="eMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.evMode = r.value; persist(); updateEstimates(); }));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", updateEstimates));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.homeMode = r.value; persist(); }));
   $("hPaid").addEventListener("input", updateEstimates);
@@ -998,10 +1032,12 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     const sel = $("sPreset");
     sel.value = [...sel.options].some((o) => o.value === st.preset) ? st.preset : "custom";
-    $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sDisc").value = st.evDiscount;
+    $("sTariff").value = st.tariff; $("sPpj").value = st.ppj; $("sDisc").value = st.evDiscount; $("sBattery").value = st.batteryKwh; $("sEff").value = st.chargeEff;
     $("sFrom").value = hh(st.discFrom); $("sTo").value = hh(st.discTo);
     const m = document.querySelector(`input[name="hMode"][value="${st.homeMode}"]`);
     if (m) m.checked = true;
+    const em = document.querySelector(`input[name="eMode"][value="${st.evMode}"]`);
+    if (em) em.checked = true;
   }
   $("sPreset").addEventListener("change", () => { const v = $("sPreset").value; if (v !== "custom") $("sTariff").value = parseFloat(v); });
   $("sTariff").addEventListener("input", () => { $("sPreset").value = "custom"; });
@@ -1010,7 +1046,8 @@ details.settings[open] > summary::after { content: "–"; }
     const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
     const hr = (id, d) => { const v = $(id).value; return v ? parseInt(v.split(":")[0], 10) : d; };
     const next = { ...S.settings, tariff: num("sTariff", DEFAULTS.tariff), preset: $("sPreset").value, ppj: num("sPpj", 0), evDiscount: Math.min(100, num("sDisc", 0)),
-      discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo) };
+      discFrom: hr("sFrom", DEFAULTS.discFrom), discTo: hr("sTo", DEFAULTS.discTo),
+      batteryKwh: num("sBattery", DEFAULTS.batteryKwh) || DEFAULTS.batteryKwh, chargeEff: Math.min(100, Math.max(50, num("sEff", DEFAULTS.chargeEff))) };
     $("sSubmit").disabled = true;
     try {
       S.settings = next; persist(); render(); setStatus("sStatus", "Settings saved.", "ok");
