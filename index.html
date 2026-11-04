@@ -288,9 +288,10 @@ details.settings[open] > summary::after { content: "–"; }
           </div>
           <div class="row2">
             <div class="field"><label for="hDate">Date</label><input type="date" id="hDate" required></div>
-            <div class="field"><label for="hValue" id="hValueLbl">kWh used</label>
-              <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
+            <div class="field"><label for="hTime">Time</label><input type="time" id="hTime" required></div>
           </div>
+          <div class="field"><label for="hValue" id="hValueLbl">kWh used</label>
+            <div class="suffix"><input type="number" id="hValue" min="0" step="0.01" inputmode="decimal" placeholder="0" required><span>kWh</span></div></div>
           <div class="field" id="hPaidField" hidden><label for="hPaid">Amount paid (optional)</label>
             <div class="suffix"><input type="number" id="hPaid" min="0" step="1" inputmode="numeric" placeholder="e.g. 100000"><span>Rp</span></div></div>
           <div class="field"><label for="hNote">Note (optional)</label><input type="text" id="hNote" maxlength="120" placeholder="e.g. weekly reading"></div>
@@ -418,7 +419,10 @@ details.settings[open] > summary::after { content: "–"; }
     const st = S.settings;
     const us = S.usage.filter((u) => u.date.startsWith(ym));
     const cs = S.charges.filter((c) => c.date.startsWith(ym));
-    const meter = us.reduce((a, u) => a + (u.kwh || 0), 0);
+    const cons = us.filter((u) => u.kind !== "topup");
+    const meter = cons.reduce((a, u) => a + (u.kwh || 0), 0);
+    const evInIntervals = cons.reduce((a, u) => a + (u.evKwh || 0), 0);
+    const pendingKwh = (S.pending || []).filter((c) => c.date.startsWith(ym)).reduce((a, c) => a + c.kwh, 0);
     let evHomeKwh = 0, evHomeRp = 0, offKwh = 0;
     for (const c of cs) {
       const { rp: r, offPeak } = chargeCost(c);
@@ -426,11 +430,11 @@ details.settings[open] > summary::after { content: "–"; }
     }
     const tops = us.filter((u) => u.kind === "topup");
     const topKwh = tops.reduce((a, u) => a + (u.tokenKwh || 0), 0), topPaid = tops.reduce((a, u) => a + (u.paidRp || 0), 0);
-    const houseKwh = Math.max(0, meter - evHomeKwh);
+    const houseKwh = cons.reduce((a, u) => a + (u.houseKwh ?? u.kwh), 0);
     const houseRp = houseKwh * st.tariff * (1 + st.ppj / 100);
-    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, offKwh,
+    return { ym, meter, us, cs, tops, topKwh, topPaid, houseKwh, houseRp, evHomeKwh, evHomeRp, offKwh, evInIntervals, pendingKwh,
       totalKwh: houseKwh + evHomeKwh, totalRp: houseRp + evHomeRp,
-      evOverMeter: evHomeKwh > meter + 0.001 };
+      evOverMeter: cons.some((u) => u.evOver) };
   }
 
   /* ---------- render: summary + breakdown ---------- */
@@ -470,10 +474,12 @@ details.settings[open] > summary::after { content: "–"; }
     $("bdFoot").innerHTML = `<tr><td>Total</td><td class="r">${numFmt1.format(A.totalKwh)}</td><td class="r">${A.totalKwh ? numFmt0.format(A.totalRp / A.totalKwh) : "—"}</td><td class="r">${rp(A.totalRp)}</td><td class="r">${tot ? "100%" : "—"}</td></tr>`;
 
     const st = S.settings;
-    let hint = `Home meter total ${kwh(A.meter)} minus home EV charging ${kwh(A.evHomeKwh)} = household ${kwh(A.houseKwh)}. PLN rate Rp ${numFmt2.format(st.tariff)}/kWh` +
+    let hint = `Each meter entry subtracts the home charging since the entry before it: meter ${kwh(A.meter)} − charging in those intervals ${kwh(A.evInIntervals)} = household ${kwh(A.houseKwh)}.`;
+    if (A.pendingKwh) hint += S.hasMeter ? ` ${kwh(A.pendingKwh)} of charging since your last reading will be subtracted when you log the next one.` : ` Log a meter entry to split household use from the ${kwh(A.pendingKwh)} of charging.`;
+    hint += ` PLN rate Rp ${numFmt2.format(st.tariff)}/kWh` +
       (st.ppj ? `, PPJ ${numFmt2.format(st.ppj)}%` : "") + (st.evDiscount ? `, EV night discount ${st.evDiscount}% (${hh(st.discFrom)}–${hh(st.discTo)}).` : ".");
     if (A.tops.length) hint += ` Token top-ups this month: ${A.tops.length}, adding ${kwh(A.topKwh)}` + (A.topPaid ? ` for ${rp(A.topPaid)} paid.` : ".");
-    if (A.evOverMeter) hint = "Home EV charging is higher than the meter total you logged this month, so household shows 0. Log your full meter usage to see the real split. " + hint;
+    if (A.evOverMeter) hint = "In at least one entry this month, home charging was higher than the meter usage, so household counts as 0 there. Check for a missing or mistyped reading. " + hint;
     $("bdHint").textContent = hint;
   }
 
@@ -653,6 +659,7 @@ details.settings[open] > summary::after { content: "–"; }
         if (d.note) bits.push(d.note);
         detail = bits[0] + (bits[1] ? " (" + bits[1] + ")" : "");
       }
+      if (it.kind === "usage" && d.kind !== "topup" && d.evKwh > 0) detail += `, household ${numFmt1.format(d.houseKwh)} kWh after ${numFmt1.format(d.evKwh)} kWh charging`;
       tr.children[1].append(chip);
       tr.children[2].textContent = detail;
       if (d.example) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Example"; tr.children[2].append(tg); }
@@ -702,13 +709,31 @@ details.settings[open] > summary::after { content: "–"; }
 
   /* ---------- forms ---------- */
   const hMode = () => document.querySelector('input[name="hMode"]:checked').value;
+  // Entries are ordered by date and time of day; entries without a time count as the end of that day.
+  const entryKey = (u) => u.date + "T" + (u.time || "23:59") + "|" + (u.createdAt || "");
+  const evKey = (c) => c.date + "T" + (c.time || "00:00");
+  const newEntryKey = (date) => date + "T" + ($("hTime").value || "23:59") + "|" + new Date().toISOString();
   function lastReadingBefore(date) {
-    return S.usage.filter((u) => u.reading != null && u.date <= date).sort((a, b) => (a.date + (a.createdAt || "")).localeCompare(b.date + (b.createdAt || ""))).pop();
+    const key = newEntryKey(date);
+    return S.usage.filter((u) => u.reading != null && entryKey(u) <= key).sort((a, b) => entryKey(a).localeCompare(entryKey(b))).pop();
   }
-  const entryKey = (u) => u.date + (u.createdAt || "");
+  // Each meter entry covers the time since the previous one, so it subtracts exactly the home charging in that interval.
+  // Charging before a starting reading (0 kWh) predates tracking; charging after the latest entry waits for the next one.
+  function allocateCharging() {
+    const cons = S.usage.filter((u) => u.kind !== "topup").sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    const evs = S.charges.slice().sort((a, b) => evKey(a).localeCompare(evKey(b)));
+    let i = 0;
+    cons.forEach((u, n) => {
+      const key = entryKey(u); let ev = 0;
+      while (i < evs.length && evKey(evs[i]) <= key) { if (n > 0 || u.kwh > 0) ev += evs[i].kwh; i++; }
+      ev = Math.round(ev * 100) / 100;
+      u.evKwh = ev; u.houseKwh = Math.max(0, Math.round((u.kwh - ev) * 100) / 100); u.evOver = ev > u.kwh + 0.005;
+    });
+    S.pending = evs.slice(i); S.hasMeter = cons.length > 0;
+  }
   // Token meter: usage between two balance readings = previous remaining + top-ups in between − current remaining.
   function tokenUsageAt(date, balance) {
-    const key = date + new Date().toISOString();
+    const key = newEntryKey(date);
     const seq = S.usage.filter((u) => (u.kind === "balance" || u.kind === "topup") && entryKey(u) <= key).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
     let prev = null, added = 0;
     for (const u of seq) {
@@ -729,6 +754,7 @@ details.settings[open] > summary::after { content: "–"; }
       }
       prev = u.balance; added = 0;
     }
+    allocateCharging();
   }
   function homeComputed() {
     const v = parseFloat($("hValue").value), date = $("hDate").value || todayStr();
@@ -822,19 +848,19 @@ details.settings[open] > summary::after { content: "–"; }
     const h = homeComputed(), date = $("hDate").value;
     if (!date) return setStatus("hStatus", "Pick a date.", "err");
     if (!h) return setStatus("hStatus", "Enter a number of kWh.", "err");
-    const mode = hMode(), note = $("hNote").value.trim(), createdAt = new Date().toISOString();
+    const mode = hMode(), note = $("hNote").value.trim(), createdAt = new Date().toISOString(), time = $("hTime").value || "23:59";
     let doc, msg;
     if (mode === "topup") {
-      doc = { date, kind: "topup", tokenKwh: Math.round(h.tokenKwh * 100) / 100, kwh: 0, note, createdAt };
+      doc = { date, time, kind: "topup", tokenKwh: Math.round(h.tokenKwh * 100) / 100, kwh: 0, note, createdAt };
       if (h.paid > 0) doc.paidRp = Math.round(h.paid);
       msg = "Top-up saved: +" + kwh(doc.tokenKwh) + ".";
     } else if (mode === "balance") {
       if (h.kwh < 0) return setStatus("hStatus", "The remaining kWh went up since your last reading. If you bought a token, log the top-up first, then the balance.", "err");
-      doc = { date, kind: "balance", balance: h.balance, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
+      doc = { date, time, kind: "balance", balance: h.balance, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
       msg = h.baseline ? "Starting balance saved." : "Saved " + kwh(doc.kwh) + " used.";
     } else {
       if (h.kwh < 0) return setStatus("hStatus", "That reading is below the previous one. Check the meter and try again.", "err");
-      doc = { date, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
+      doc = { date, time, kwh: Math.round(h.kwh * 100) / 100, note, createdAt };
       if (h.reading != null) doc.reading = h.reading;
       msg = h.baseline ? "Baseline reading saved." : "Saved " + kwh(doc.kwh) + ".";
     }
@@ -884,7 +910,7 @@ details.settings[open] > summary::after { content: "–"; }
         charges.push({ date: iso(d), time: pick(["22:15", "22:30", "22:45", "23:00", "21:30", "19:10"]), kwh: +uni(16, 31).toFixed(1), place: "home", note: "" });
     }
     let reading = 18234.5, prev = new Date(start); prev.setDate(prev.getDate() - 1);
-    usage.push({ date: iso(start), kwh: 0, reading, note: "Starting reading" });
+    usage.push({ date: iso(start), time: "08:00", kwh: 0, reading, note: "Starting reading" });
     const logDays = [];
     for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) if (d.getDay() === 0) logDays.push(new Date(d));
     if (!logDays.length || iso(logDays[logDays.length - 1]) !== iso(end)) logDays.push(new Date(end));
@@ -894,7 +920,7 @@ details.settings[open] > summary::after { content: "–"; }
       const ev = charges.filter((c) => c.place === "home" && c.date > iso(prev) && c.date <= iso(ld)).reduce((a, c) => a + c.kwh, 0);
       const k = Math.round((house + ev) * 10) / 10;
       reading = Math.round((reading + k) * 10) / 10;
-      usage.push({ date: iso(ld), kwh: k, reading, note: "Weekly reading" });
+      usage.push({ date: iso(ld), time: "20:00", kwh: k, reading, note: "Weekly reading" });
       prev = ld;
     }
     const tag = (x) => ({ ...x, id: newId(), example: true, createdAt: x.date + "T12:00:00.000Z" });
@@ -950,7 +976,7 @@ details.settings[open] > summary::after { content: "–"; }
   }
   $("tabHome").addEventListener("click", () => selectTab("home"));
   $("tabEv").addEventListener("click", () => selectTab("ev"));
-  ["hValue", "hDate"].forEach((id) => $(id).addEventListener("input", updateEstimates));
+  ["hValue", "hDate", "hTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   ["eKwh", "eTime"].forEach((id) => $(id).addEventListener("input", updateEstimates));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", updateEstimates));
   document.querySelectorAll('input[name="hMode"]').forEach((r) => r.addEventListener("change", () => { S.settings.homeMode = r.value; persist(); }));
@@ -1002,6 +1028,7 @@ details.settings[open] > summary::after { content: "–"; }
   if (!S.storageOk) S.offlineMsg = "This browser isn't letting the page save (private mode or blocked site data). Entries will be lost when you close it.";
   openLatestMonth();
   $("hDate").value = todayStr(); $("eDate").value = todayStr();
+  { const n = new Date(); $("hTime").value = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0"); }
   fillSettings(); render();
   let raf = 0;
   new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderCharts); }).observe($("trendChart"));

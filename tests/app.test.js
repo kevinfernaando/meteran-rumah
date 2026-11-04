@@ -38,10 +38,10 @@ async function logEv(page, { date, time, kwh }) {
   await page.fill('#eDate', date); await page.fill('#eTime', time); await page.fill('#eKwh', String(kwh));
   await page.click('#eSubmit');
 }
-async function logMeter(page, { date, kwh }) {
+async function logMeter(page, { date, kwh, time = '23:59', mode = 'kwh' }) {
   await page.click('#tabHome');
-  await page.check('#hModeKwh');
-  await page.fill('#hDate', date); await page.fill('#hValue', String(kwh));
+  await page.check(mode === 'kwh' ? '#hModeKwh' : mode === 'meter' ? '#hModeMeter' : '#hModeBalance');
+  await page.fill('#hDate', date); await page.fill('#hTime', time); await page.fill('#hValue', String(kwh));
   await page.click('#hSubmit');
 }
 
@@ -208,5 +208,40 @@ test('public sessions saved by an older version are left out of totals', async (
   assert.equal(await text(page, '#kTotal'), 'Rp 20.226');
   assert.match(await text(page, '#kTotalSub'), /^20,0 kWh/);
   assert.equal(await page.locator('#histWrap tbody tr').count(), 1);
+  await ctx.close();
+});
+
+/* ---------- per-interval subtraction ---------- */
+const monthDates = (page) => page.evaluate(() => {
+  const f = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const now = new Date();
+  return { prevFirst: f(new Date(now.getFullYear(), now.getMonth() - 1, 1)), prevLast: f(new Date(now.getFullYear(), now.getMonth(), 0)), curFirst: f(new Date(now.getFullYear(), now.getMonth(), 1)) };
+});
+
+test('charging between two readings is subtracted from the later reading, even across months', async () => {
+  const { ctx, page, errors } = await freshPage();
+  const m = await monthDates(page);
+  await logMeter(page, { date: m.prevFirst, time: '08:00', kwh: 1000, mode: 'meter' });   // baseline
+  await logEv(page, { date: m.prevLast, time: '22:30', kwh: 20 });
+  await logMeter(page, { date: m.curFirst, time: '09:00', kwh: 1100, mode: 'meter' });    // 100 kWh used
+  assert.match(await text(page, '#kHouseSub'), /^80,0 kWh/);                              // 100 − 20 charged on the last day of last month
+  await page.click('#prevMonth');
+  assert.match(await text(page, '#kEvHomeSub'), /^20,0 kWh/);                            // the charge still costs last month
+  assert.doesNotMatch(await text(page, '#bdHint'), /higher than the meter/i);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('the time of day decides which reading a same-day charge belongs to', async () => {
+  const { ctx, page } = await freshPage();
+  const d = await todayIn(page);
+  await logMeter(page, { date: d, time: '08:00', kwh: 50, mode: 'balance' });            // starting balance
+  await logEv(page, { date: d, time: '22:30', kwh: 10 });
+  await logMeter(page, { date: d, time: '21:00', kwh: 25, mode: 'balance' });            // 25 used, charge is later
+  assert.match(await text(page, '#kHouseSub'), /^25,0 kWh/);
+  assert.match(await text(page, '#bdHint'), /10,0 kWh of charging since your last reading/);
+  await logMeter(page, { date: d, time: '23:30', kwh: 10, mode: 'balance' });            // 15 used, 10 of it the car
+  assert.match(await text(page, '#kHouseSub'), /^30,0 kWh/);                              // 25 + (15 − 10)
+  assert.doesNotMatch(await text(page, '#bdHint'), /since your last reading/);
   await ctx.close();
 });
