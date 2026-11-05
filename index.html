@@ -662,17 +662,19 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
       const house = dailyHousehold(), ev = {};
       for (const c of S.charges) ev[c.date] = (ev[c.date] || 0) + c.kwh;
       const today = days.indexOf(todayStr());
-      $("trendTitle").textContent = "Daily, " + ymLabel(S.month, true);
+      // running totals through the month
+      const running = (perDay) => { let t = 0; return days.map((d) => (t += (perDay[d] || 0) * (rpMode ? rate : 1))); };
+      $("trendTitle").textContent = ymLabel(S.month, true) + ", running total";
       drawLines($("trendChart"), {
-        aria: "Daily electricity in " + ymLabel(S.month, true),
+        aria: "Running total of electricity use through " + ymLabel(S.month, true),
         cats: days, selected: today, last: today >= 0 ? today : nd - 1,
         series: [
-          { name: "Household", line: "l1", sw: "s1", values: days.map((d) => (house[d] || 0) * (rpMode ? rate : 1)) },
-          { name: "EV charging", line: "l2", sw: "s2", values: days.map((d) => (ev[d] || 0) * (rpMode ? rate : 1)) },
+          { name: "Household", line: "l1", sw: "s1", values: running(house) },
+          { name: "EV charging", line: "l2", sw: "s2", values: running(ev) },
         ],
         fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
         fmtTip: (v) => rpMode ? rp(v) : kwh(v),
-        tipTitle: (i) => fmtDate(days[i]) + " " + S.month.slice(0, 4),
+        tipTitle: (i) => "So far, to " + fmtDate(days[i]) + " " + S.month.slice(0, 4),
         showTick: (i) => i === 0 || (i + 1) % 5 === 0, tickLabel: (i) => String(i + 1),
         emptyText: "Nothing logged in " + ymLabel(S.month, true) + " yet", height: 200,
       });

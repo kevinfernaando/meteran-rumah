@@ -473,7 +473,7 @@ test('the chart can switch to a daily view of the selected month', async () => {
   await page.click('#viewDaily');
   const days = await page.evaluate(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate(); });
   assert.equal(await page.locator('#trendChart .hit').count(), days);                    // one column per day
-  assert.match(await text(page, '#trendTitle'), /Daily/);
+  assert.match(await text(page, '#trendTitle'), /running total/i);
   await page.click('#viewMonthly');
   assert.equal(await page.locator('#trendChart .hit').count(), 6);
   assert.deepEqual(errors, []);
@@ -490,11 +490,13 @@ test('daily view spreads household use between readings across the days in betwe
   await page.click('[data-unit="kwh"]');
   await page.click('#viewDaily');
   const tipFor = async (i) => { await page.locator('#trendChart .hit').nth(i).dispatchEvent('pointerenter'); return text(page, '#trendChart .tip'); };
+  // the daily view shows running totals: 25 kWh a day of household use adds up 25, 50, 75, 100
   const day2 = await tipFor(1);
-  assert.match(day2, /Household\s*25,0 kWh/);
+  assert.match(day2, /Household\s*50,0 kWh/);
   assert.match(day2, /EV charging\s*20,0 kWh/);
-  assert.match(await tipFor(3), /Household\s*25,0 kWh/);
-  assert.match(await tipFor(4), /Household\s*0,0 kWh/);
+  assert.match(await tipFor(3), /Household\s*100,0 kWh/);
+  assert.match(await tipFor(4), /Household\s*100,0 kWh/);
+  assert.match(await tipFor(4), /EV charging\s*20,0 kWh/);
   await ctx.close();
 });
 
@@ -530,5 +532,19 @@ test('in the current month the daily lines stop at today', async () => {
   const today = await page.evaluate(() => new Date().getDate());
   const points = await page.$eval('#trendChart path.line', (p) => (p.getAttribute('d').match(/[ML]/g) || []).length);
   assert.equal(points, today);
+  await ctx.close();
+});
+
+test('the daily running totals never go down and are labelled as so far', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  await page.click('#prevMonth');
+  await page.click('#viewDaily');
+  for (const sel of ['#trendChart path.line.l1', '#trendChart path.line.l2']) {
+    const ys = await page.$eval(sel, (p) => [...p.getAttribute('d').matchAll(/[ML][\d.]+,([\d.]+)/g)].map((m) => +m[1]));
+    assert.ok(ys.every((y, i) => i === 0 || y <= ys[i - 1] + 0.01), sel + ' goes down');   // SVG y grows downwards
+  }
+  await page.locator('#trendChart .hit').nth(20).dispatchEvent('pointerenter');
+  assert.match(await text(page, '#trendChart .tip'), /so far/i);
   await ctx.close();
 });
