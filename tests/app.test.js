@@ -505,3 +505,30 @@ test('the chosen chart view is remembered on the device', async () => {
   assert.equal(await page.getAttribute('#viewDaily', 'aria-pressed'), 'true');
   await ctx.close();
 });
+
+test('the daily view is a line chart and the monthly view stays bars', async () => {
+  const { ctx, page, errors } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  await page.click('#prevMonth');
+  await page.click('#viewDaily');
+  assert.equal(await page.locator('#trendChart path.line').count(), 2);              // household + EV charging
+  assert.equal(await page.locator('#trendChart .f1, #trendChart .f2').count(), 0);   // no bars
+  await page.locator('#trendChart .hit').nth(10).dispatchEvent('pointerenter');
+  assert.equal(await page.getAttribute('#trendChart .crosshair', 'visibility'), 'visible');   // a vertical line has zero width, so check the attribute
+  assert.match(await text(page, '#trendChart .tip'), /Household/);
+  await page.click('#viewMonthly');
+  assert.equal(await page.locator('#trendChart path.line').count(), 0);
+  assert.ok(await page.locator('#trendChart .f1').count() > 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('in the current month the daily lines stop at today', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  await page.click('#viewDaily');
+  const today = await page.evaluate(() => new Date().getDate());
+  const points = await page.$eval('#trendChart path.line', (p) => (p.getAttribute('d').match(/[ML]/g) || []).length);
+  assert.equal(points, today);
+  await ctx.close();
+});
