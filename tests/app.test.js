@@ -458,3 +458,50 @@ test('settings no longer has a backup section', async () => {
   assert.doesNotMatch(await page.locator('#sheetSettings').innerText(), /backup/i);
   await ctx.close();
 });
+
+/* ---------- monthly / daily chart ---------- */
+const prevMonthDay = (page, day) => page.evaluate((day) => {
+  const n = new Date(), d = new Date(n.getFullYear(), n.getMonth() - 1, day);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}, day);
+
+test('the chart can switch to a daily view of the selected month', async () => {
+  const { ctx, page, errors } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  assert.equal(await page.getAttribute('#viewMonthly', 'aria-pressed'), 'true');
+  assert.equal(await page.locator('#trendChart .hit').count(), 6);                       // six months
+  await page.click('#viewDaily');
+  const days = await page.evaluate(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate(); });
+  assert.equal(await page.locator('#trendChart .hit').count(), days);                    // one column per day
+  assert.match(await text(page, '#trendTitle'), /Daily/);
+  await page.click('#viewMonthly');
+  assert.equal(await page.locator('#trendChart .hit').count(), 6);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('daily view spreads household use between readings across the days in between', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  const d1 = await prevMonthDay(page, 1), d5 = await prevMonthDay(page, 5), d2 = await prevMonthDay(page, 2);
+  await logMeter(page, { date: d1, time: '00:00', kwh: 300 });
+  await logEv(page, { date: d2, time: '21:00', kwh: 20 });
+  await logMeter(page, { date: d5, time: '00:00', kwh: 180 });     // 120 used, 20 of it the car → 100 household over 4 days
+  // saving an entry already shows that entry's month
+  await page.click('[data-unit="kwh"]');
+  await page.click('#viewDaily');
+  const tipFor = async (i) => { await page.locator('#trendChart .hit').nth(i).dispatchEvent('pointerenter'); return text(page, '#trendChart .tip'); };
+  const day2 = await tipFor(1);
+  assert.match(day2, /Household\s*25,0 kWh/);
+  assert.match(day2, /EV charging\s*20,0 kWh/);
+  assert.match(await tipFor(3), /Household\s*25,0 kWh/);
+  assert.match(await tipFor(4), /Household\s*0,0 kWh/);
+  await ctx.close();
+});
+
+test('the chosen chart view is remembered on the device', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#viewDaily');
+  await page.reload();
+  assert.equal(await page.getAttribute('#viewDaily', 'aria-pressed'), 'true');
+  await ctx.close();
+});

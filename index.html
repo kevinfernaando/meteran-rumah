@@ -112,6 +112,8 @@ button, input, select { font: inherit; color: inherit; }
 .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 0 10px; height: 28px; cursor: pointer; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line-2); }
+.segs { display: flex; gap: 8px; flex-wrap: wrap; }
+.chart-head { flex-direction: column; align-items: flex-start; gap: 10px; }
 .seg button[aria-pressed="true"] { background: var(--sel); color: var(--sel-ink); }
 .legend { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .8rem; color: var(--ink-2); }
 .key { display: inline-flex; align-items: center; gap: 6px; }
@@ -237,11 +239,17 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
   </section>
 
   <section class="sec" aria-labelledby="trendTitle">
-    <div class="sec-head">
+    <div class="sec-head chart-head">
       <h2 id="trendTitle">Last 6 months</h2>
-      <div class="seg" role="group" aria-label="Chart unit">
-        <button type="button" data-unit="rp" aria-pressed="true">Rp</button>
-        <button type="button" data-unit="kwh" aria-pressed="false">kWh</button>
+      <div class="segs">
+        <div class="seg" role="group" aria-label="Chart period">
+          <button type="button" id="viewMonthly" data-view="monthly" aria-pressed="true">Monthly</button>
+          <button type="button" id="viewDaily" data-view="daily" aria-pressed="false">Daily</button>
+        </div>
+        <div class="seg" role="group" aria-label="Chart unit">
+          <button type="button" data-unit="rp" aria-pressed="true">Rp</button>
+          <button type="button" data-unit="kwh" aria-pressed="false">kWh</button>
+        </div>
       </div>
     </div>
     <div class="legend">
@@ -389,7 +397,7 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
   const DEFAULTS = { tariff: 1444.7, preset: "1444.7", ppj: 0, batteryKwh: 58.9, chargeEff: 90 };
   const S = {
     usage: [], charges: [], settings: { ...DEFAULTS },
-    month: ymOf(new Date()), unit: "rp",
+    month: ymOf(new Date()), unit: "rp", view: "monthly",
     canWrite: true, storageOk: true, legacyPublic: [], active: null,
   };
 
@@ -552,8 +560,51 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
     host.append(svg, tip);
   }
 
+  const dayOf = (ms) => { const d = new Date(ms); return ymOf(d) + "-" + String(d.getDate()).padStart(2, "0"); };
+  // Household use is only known per interval between meter entries; for the daily view it is spread
+  // evenly over the time each interval covers (split at midnight), so a weekly reading doesn't become one tall bar.
+  function dailyHousehold() {
+    const out = {}, add = (day, k) => { out[day] = (out[day] || 0) + k; };
+    const cons = S.usage.filter(isConsumption).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    let prevT = null;
+    for (const u of cons) {
+      const t = Date.parse(u.date + "T" + (u.time || "23:59") + ":00"), k = u.houseKwh ?? u.kwh;
+      if (k > 0) {
+        if (prevT == null || !(t > prevT)) add(u.date, k);
+        else for (let a = prevT; a < t;) {
+          const d = new Date(a), next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(), b = Math.min(next, t);
+          add(dayOf(a), k * (b - a) / (t - prevT)); a = b;
+        }
+      }
+      if (!Number.isNaN(t)) prevT = t;
+    }
+    return out;
+  }
   function renderCharts() {
-    const rpMode = S.unit === "rp";
+    const rpMode = S.unit === "rp", rate = S.settings.tariff * (1 + S.settings.ppj / 100);
+    document.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.view === S.view)));
+    if (S.view === "daily") {
+      const nd = daysIn(S.month), days = Array.from({ length: nd }, (_, i) => S.month + "-" + String(i + 1).padStart(2, "0"));
+      const house = dailyHousehold(), ev = {};
+      for (const c of S.charges) ev[c.date] = (ev[c.date] || 0) + c.kwh;
+      const today = days.indexOf(todayStr());
+      $("trendTitle").textContent = "Daily, " + ymLabel(S.month, true);
+      drawStacked($("trendChart"), {
+        aria: "Daily electricity in " + ymLabel(S.month, true),
+        cats: days, selected: today,
+        series: [
+          { name: "Household", cls: "f1", sw: "s1", values: days.map((d) => (house[d] || 0) * (rpMode ? rate : 1)) },
+          { name: "EV charging", cls: "f2", sw: "s2", values: days.map((d) => (ev[d] || 0) * (rpMode ? rate : 1)) },
+        ],
+        fmtAxis: (v) => rpMode ? (v ? rpShort(v) : "0") : numFmt0.format(v),
+        fmtTip: (v) => rpMode ? rp(v) : kwh(v),
+        tipTitle: (i) => fmtDate(days[i]) + " " + S.month.slice(0, 4),
+        showTick: (i) => i === 0 || (i + 1) % 5 === 0, tickLabel: (i) => String(i + 1),
+        emptyText: "Nothing logged in " + ymLabel(S.month, true) + " yet", maxBar: 9, height: 200,
+      });
+      return;
+    }
+    $("trendTitle").textContent = "Last 6 months";
     const months = Array.from({ length: 6 }, (_, i) => shiftYm(S.month, i - 5));
     const aggs = months.map(monthAgg);
     drawStacked($("trendChart"), {
@@ -1003,13 +1054,19 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
   // month nav + unit
   $("prevMonth").addEventListener("click", () => { S.month = shiftYm(S.month, -1); render(); });
   $("nextMonth").addEventListener("click", () => { S.month = shiftYm(S.month, 1); render(); });
-  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => {
+    S.view = b.dataset.view;
+    try { localStorage.setItem("meteran.view", S.view); } catch {}
+    renderCharts();
+  }));
+  try { const v = localStorage.getItem("meteran.view"); if (v === "daily" || v === "monthly") S.view = v; } catch {}
+  document.querySelectorAll("[data-unit]").forEach((b) => b.addEventListener("click", () => {
     S.unit = b.dataset.unit;
-    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    document.querySelectorAll("[data-unit]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     try { localStorage.setItem("meteran.unit", S.unit); } catch {}
     renderCharts();
   }));
-  try { const u = localStorage.getItem("meteran.unit"); if (u === "kwh" || u === "rp") { S.unit = u; document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.unit === u))); } } catch {}
+  try { const u = localStorage.getItem("meteran.unit"); if (u === "kwh" || u === "rp") { S.unit = u; document.querySelectorAll("[data-unit]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.unit === u))); } } catch {}
 
   // settings
   function fillSettings() {
