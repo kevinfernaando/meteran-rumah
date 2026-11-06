@@ -100,6 +100,9 @@ button, input, select { font: inherit; color: inherit; }
 .sum-cols > div { display: grid; gap: 4px; padding: 16px 18px; min-width: 0; }
 .sum-cols > div + div { border-left: 1px solid var(--line); }
 .sum-cols .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.05rem; letter-spacing: -.03em; }
+.fc { margin-top: 16px; }
+.big-2 { font-size: clamp(1.5rem, 6.5vw, 1.9rem); }
+.fc-note { margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--line); font-size: .84rem; color: var(--muted); }
 .sw { width: 8px; height: 8px; flex: none; display: inline-block; }
 .sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
 
@@ -240,6 +243,19 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
       <div><span class="lbl"><i class="sw s1"></i>Household</span><span class="v" id="kHouse">Rp 0</span><span class="mono dim" id="kHouseSub">0,0 kWh</span></div>
       <div><span class="lbl"><i class="sw s2"></i>EV charging</span><span class="v" id="kEvHome">Rp 0</span><span class="mono dim" id="kEvHomeSub">0,0 kWh</span></div>
     </div>
+  </section>
+
+  <section class="sum fc" id="forecast" aria-labelledby="fcTitle" hidden>
+    <div class="sum-total">
+      <span class="lbl" id="fcTitle">Forecast for this month</span>
+      <span class="big big-2" id="fTotal">Rp 0</span>
+      <span class="mono dim" id="fTotalSub"></span>
+    </div>
+    <div class="sum-cols" id="fCols">
+      <div><span class="lbl"><i class="sw s1"></i>Household</span><span class="v" id="fHouse">Rp 0</span><span class="mono dim" id="fHouseSub">0,0 kWh</span></div>
+      <div><span class="lbl"><i class="sw s2"></i>EV charging</span><span class="v" id="fEv">Rp 0</span><span class="mono dim" id="fEvSub">0,0 kWh</span></div>
+    </div>
+    <p class="fc-note" id="fNote"></p>
   </section>
 
   <section class="sec" aria-labelledby="trendTitle">
@@ -470,6 +486,61 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
       d.style.flexGrow = tot ? String(v / tot) : "0"; d.style.flexBasis = "0";
       return d;
     }));
+  }
+
+  /* ---------- forecast for the current month ---------- */
+  // Household: average daily household use over the last 30 days of meter entries, applied from the latest
+  // reading or top-up to the end of the month. EV: average daily charging over the last 30 days, applied to the
+  // days left. Both are added to what this month already counts and priced at the tariff + PPJ.
+  const DAY = 864e5;
+  const entryTime = (u) => Date.parse(u.date + "T" + (u.time || "23:59") + ":00");
+  function forecast(A) {
+    const now = Date.now(), n = new Date(now);
+    const monthStart = new Date(n.getFullYear(), n.getMonth(), 1).getTime(), monthEnd = new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime();
+    const cons = S.usage.filter(isConsumption).sort((a, b) => entryKey(a).localeCompare(entryKey(b)));
+    let houseRate = null, covEnd = null;
+    if (cons.length >= 2) {
+      covEnd = entryTime(cons[cons.length - 1]);
+      const winStart = Math.max(entryTime(cons[0]), covEnd - 30 * DAY);
+      let kwhIn = 0;
+      for (let i = 1; i < cons.length; i++) {
+        const a = entryTime(cons[i - 1]), b = entryTime(cons[i]), k = cons[i].houseKwh ?? cons[i].kwh;
+        if (!(b > a) || !(k > 0)) continue;
+        const ov = Math.min(b, covEnd) - Math.max(a, winStart);
+        if (ov > 0) kwhIn += k * ov / (b - a);
+      }
+      if (covEnd - winStart >= 2 * DAY) houseRate = kwhIn / ((covEnd - winStart) / DAY);
+    }
+    const firstData = Math.min(...[...cons.map(entryTime), ...S.charges.map((c) => Date.parse(c.date + "T" + (c.time || "00:00") + ":00"))].filter(Number.isFinite), now);
+    const evStart = Math.max(firstData, now - 30 * DAY), evDays = Math.max(1, (now - evStart) / DAY);
+    const evKwh30 = S.charges.filter((c) => { const t = Date.parse(c.date + "T" + (c.time || "00:00") + ":00"); return t >= evStart && t <= now; }).reduce((s, c) => s + c.kwh, 0);
+    const evRate = evKwh30 / evDays;
+    if (houseRate == null) return null;
+    const houseLeftDays = Math.max(0, (monthEnd - Math.max(covEnd, monthStart)) / DAY), evLeftDays = Math.max(0, (monthEnd - now) / DAY);
+    const rate = S.settings.tariff * (1 + S.settings.ppj / 100);
+    const houseKwh = A.houseKwh + houseRate * houseLeftDays, evKwh = A.evHomeKwh + evRate * evLeftDays;
+    return { houseKwh, evKwh, houseRp: houseKwh * rate, evRp: evKwh * rate, totalRp: (houseKwh + evKwh) * rate, totalKwh: houseKwh + evKwh,
+      daysLeft: Math.ceil(evLeftDays), monthEnd };
+  }
+  function renderForecast(A) {
+    const box = $("forecast"), cur = ymOf(new Date());
+    box.hidden = S.month !== cur;
+    if (box.hidden) return;
+    const f = forecast(A), monthName = MONTHS_L[Number(cur.slice(5)) - 1];
+    $("fcTitle").textContent = "Forecast for " + monthName;
+    $("fCols").hidden = !f; $("fTotal").hidden = !f; $("fTotalSub").hidden = !f;
+    if (!f) { $("fNote").textContent = "Log a few more meter readings or top-ups, a couple of days apart, to see a forecast for the month."; return; }
+    $("fTotal").textContent = rp(f.totalRp);
+    $("fTotalSub").textContent = kwh(f.totalKwh) + " by " + fmtDate(ymOf(new Date(f.monthEnd - 1)) + "-" + String(new Date(f.monthEnd - 1).getDate()).padStart(2, "0"));
+    $("fHouse").textContent = rp(f.houseRp); $("fHouseSub").textContent = kwh(f.houseKwh);
+    $("fEv").textContent = rp(f.evRp); $("fEvSub").textContent = kwh(f.evKwh);
+    const prev = monthAgg(shiftYm(cur, -1));
+    let note = `Based on your last 30 days, ${f.daysLeft} day${f.daysLeft === 1 ? "" : "s"} to go.`;
+    if (prev.totalRp > 0) {
+      const diff = f.totalRp - prev.totalRp, pct = Math.round(Math.abs(diff) / prev.totalRp * 100), prevName = MONTHS_L[Number(prev.ym.slice(5)) - 1];
+      note += Math.abs(diff) < 1000 ? ` About the same as ${prevName}.` : ` ${rp(Math.abs(diff))} (${pct}%) ${diff > 0 ? "more" : "less"} than ${prevName}.`;
+    }
+    $("fNote").textContent = note;
   }
 
   /* ---------- charts (hand-drawn SVG stacked bars) ---------- */
@@ -785,7 +856,7 @@ input:focus, select:focus { border-color: var(--focus); outline: none; box-shado
 
   function render() {
     const A = monthAgg(S.month);
-    renderSummary(A); renderCharts(); renderHistory(A); renderActive();
+    renderSummary(A); renderForecast(A); renderCharts(); renderHistory(A); renderActive();
     renderNotice(S.usage.filter((u) => u.example).length + S.charges.filter((c) => c.example).length);
     updateEstimates();
   }

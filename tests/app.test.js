@@ -548,3 +548,59 @@ test('the daily running totals never go down and are labelled as so far', async 
   assert.match(await text(page, '#trendChart .tip'), /so far/i);
   await ctx.close();
 });
+
+/* ---------- forecast for the current month ---------- */
+const daysAgo = (page, n, time = '00:00') => page.evaluate(([n, time]) => {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return { date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, time };
+}, [n, time]);
+const kwhIn = (s) => parseFloat(s.match(/([\d.]+,\d) kWh/)[1].replace(/\./g, '').replace(',', '.'));
+
+test('the forecast projects household use from the recent daily rate to the end of the month', async () => {
+  const { ctx, page, errors } = await freshPage({ viewport: { width: 390, height: 844 } });
+  const a = await daysAgo(page, 10), b = await daysAgo(page, 2);
+  await logMeter(page, { ...a, kwh: 500 });
+  await logMeter(page, { ...b, kwh: 420 });                     // 80 kWh over 8 days → 10 kWh a day
+  // back to the current month if saving moved the view
+  while (!(await page.locator('#nextMonth').isDisabled())) await page.click('#nextMonth');
+  const expected = await page.evaluate(([b]) => {
+    const n = new Date(), monthStart = new Date(n.getFullYear(), n.getMonth(), 1), monthEnd = new Date(n.getFullYear(), n.getMonth() + 1, 1);
+    const last = new Date(b.date + 'T' + b.time + ':00');
+    const soFar = last >= monthStart ? 80 : 0;                    // the 80 kWh counts in the month of the reading that ends it
+    return soFar + 10 * (monthEnd - Math.max(last, monthStart)) / 864e5;
+  }, [b]);
+  assert.equal(await page.locator('#forecast').isVisible(), true);
+  const got = kwhIn(await text(page, '#fHouseSub'));
+  assert.ok(Math.abs(got - expected) < 0.2, `household forecast ${got} kWh, expected about ${expected.toFixed(1)}`);
+  assert.match(await text(page, '#fNote'), /last 30 days/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('the forecast total is household plus EV charging at the tariff', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  const total = await text(page, '#fTotal'), house = await text(page, '#fHouse'), ev = await text(page, '#fEv');
+  const rp = (s) => +s.replace(/[^\d]/g, '');
+  assert.ok(Math.abs(rp(total) - rp(house) - rp(ev)) <= 1, `${total} ≠ ${house} + ${ev}`);
+  assert.ok(rp(total) >= rp(await text(page, '#kTotal')), 'forecast is below what is already spent');
+  assert.match(await text(page, '#fNote'), /than (January|February|March|April|May|June|July|August|September|October|November|December)/);
+  await ctx.close();
+});
+
+test('the forecast only shows for the current month', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  await page.click('#loadExamples');
+  assert.equal(await page.locator('#forecast').isVisible(), true);
+  await page.click('#prevMonth');
+  assert.equal(await page.locator('#forecast').isHidden(), true);
+  await ctx.close();
+});
+
+test('with too little history the forecast says so instead of guessing', async () => {
+  const { ctx, page } = await freshPage({ viewport: { width: 390, height: 844 } });
+  const a = await daysAgo(page, 0, '00:01');
+  await logMeter(page, { ...a, kwh: 300 });                      // one reading, no usage yet
+  assert.match(await text(page, '#forecast'), /log a few more/i);
+  await ctx.close();
+});
